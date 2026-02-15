@@ -335,6 +335,12 @@ function finishHumanAction(msg) {
   render();
 }
 
+function returnToDrawDecision(msg) {
+  state.phase = 'draw_decision';
+  state.message = msg || 'You drew ' + cardName(state.drawnCard) + '. What will you do?';
+  render();
+}
+
 // ---- UI Rendering ----
 function render() {
   if (state.phase === 'start') return;
@@ -919,32 +925,25 @@ function resolveMatches() {
       state.pendingGives.push({ pIdx: m.pIdx, cIdx: m.cIdx });
     }
 
-    // Discard drawn card
-    discardCard(state.drawnCard);
-    state.drawnCard = null;
-
-    // Start giving cards
+    // Start giving cards (drawn card stays in hand)
     processNextGive();
     return;
   }
 
-  // No opponent matches to give for, just discard drawn card and move on
-  discardCard(state.drawnCard);
-  state.drawnCard = null;
-
+  // No opponent matches, return to draw_decision with card still in hand
   let msg = 'Matching done. ';
   msg += correctOwn.length + ' matched';
   if (wrong.length > 0) msg += ', ' + wrong.length + ' penalty card(s)';
-  msg += '.';
+  msg += '. Now swap, discard, or use your drawn card.';
 
   state.selectedCards.clear();
-  finishHumanAction(msg);
+  returnToDrawDecision(msg);
 }
 
 function processNextGive() {
   if (state.pendingGives.length === 0) {
     state.selectedCards.clear();
-    finishHumanAction('All matches resolved!');
+    returnToDrawDecision('All matches resolved! Now swap, discard, or use your drawn card.');
     return;
   }
 
