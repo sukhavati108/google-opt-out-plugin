@@ -108,7 +108,7 @@ const match = {
 
 // ---- Game State ----
 let game = null;
-let showMemoryAids = true;
+let showMemoryAids = false;
 
 const state = {
   phase: 'start',
@@ -681,6 +681,14 @@ function createCardElement(card, options) {
   }
 
   return slot;
+}
+
+function highlightMemoryAids() {
+  render();
+  document.querySelectorAll('.card-memory').forEach(el => {
+    el.classList.add('card-memory-highlight');
+    setTimeout(() => el.classList.remove('card-memory-highlight'), 1500);
+  });
 }
 
 function renderOpponents() {
@@ -1281,10 +1289,12 @@ function renderGameOver() {
     checkbox.type = 'checkbox';
     checkbox.checked = showMemoryAids;
     checkbox.addEventListener('change', () => {
+      const wasOff = !showMemoryAids;
       showMemoryAids = checkbox.checked;
+      if (showMemoryAids && wasOff) highlightMemoryAids();
     });
     label.appendChild(checkbox);
-    label.appendChild(document.createTextNode(' Show memory aids'));
+    label.appendChild(document.createTextNode(' \ud83d\udca1 Memory Helper \u2014 show remembered card values'));
     toggleDiv.appendChild(label);
     content.appendChild(toggleDiv);
   }
