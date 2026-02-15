@@ -2351,6 +2351,149 @@ function showGameScreen() {
   document.getElementById('game-screen').style.display = '';
 }
 
+// ---- How to Play ----
+function showRulesOverlay() {
+  const existing = document.querySelector('.rules-overlay');
+  if (existing) { existing.remove(); return; }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'rules-overlay';
+
+  const content = document.createElement('div');
+  content.className = 'rules-content';
+
+  // Close button (top-right)
+  const closeX = document.createElement('button');
+  closeX.className = 'rules-close-x';
+  closeX.textContent = '\u2715';
+  closeX.addEventListener('click', () => overlay.remove());
+  content.appendChild(closeX);
+
+  // Title
+  const h1 = document.createElement('h1');
+  h1.textContent = 'How to Play CABO';
+  content.appendChild(h1);
+
+  const intro = document.createElement('p');
+  intro.className = 'rules-intro';
+  intro.textContent = 'CABO is a card game of memory and deduction. Your goal is to end the round with the lowest total card value. The catch? Most of your cards are face-down — you have to remember what you have!';
+  content.appendChild(intro);
+
+  // Helper to build sections
+  function addSection(title, body) {
+    const section = document.createElement('div');
+    section.className = 'rules-section';
+    const h2 = document.createElement('h2');
+    h2.textContent = title;
+    section.appendChild(h2);
+    if (typeof body === 'string') {
+      const p = document.createElement('p');
+      p.innerHTML = body;
+      section.appendChild(p);
+    } else {
+      section.appendChild(body);
+    }
+    content.appendChild(section);
+  }
+
+  // --- Setup ---
+  addSection('Setup', 'Each player gets <strong>4 cards</strong> laid face-down in a <strong>2\u00d72 grid</strong>. Before the game begins, you <strong>peek at your bottom two cards</strong> — memorize them! The rest remain unknown. A discard pile is started with one card from the deck.');
+
+  // --- Card Values ---
+  const valTable = document.createElement('div');
+  valTable.className = 'rules-card-values';
+
+  const cardRows = [
+    { label: 'Joker \u2605', value: '\u22121', cls: 'val-best' },
+    { label: 'Red King \u2665\u2666', value: '0', cls: 'val-good' },
+    { label: 'Ace', value: '1', cls: '' },
+    { label: '2 \u2013 10', value: 'Face value', cls: '' },
+    { label: 'Jack', value: '11', cls: '' },
+    { label: 'Queen', value: '12', cls: '' },
+    { label: 'Black King \u2660\u2663', value: '13', cls: 'val-bad' },
+  ];
+
+  for (const row of cardRows) {
+    const r = document.createElement('div');
+    r.className = 'rules-val-row' + (row.cls ? ' ' + row.cls : '');
+    const name = document.createElement('span');
+    name.className = 'rules-val-name';
+    name.textContent = row.label;
+    const val = document.createElement('span');
+    val.className = 'rules-val-num';
+    val.textContent = row.value;
+    r.appendChild(name);
+    r.appendChild(val);
+    valTable.appendChild(r);
+  }
+
+  addSection('Card Values', valTable);
+
+  // --- Turn Structure ---
+  addSection('Turn Structure',
+    '<strong>1. Draw</strong> — Take the top card from the <strong>deck</strong> (unseen) or the <strong>discard pile</strong> (known).<br><br>' +
+    '<strong>2. Act</strong> — After drawing, you can:<br>' +
+    '\u2022 <strong>Swap</strong> the drawn card with one of your face-down cards<br>' +
+    '\u2022 <strong>Discard</strong> the drawn card (do nothing)<br>' +
+    '\u2022 <strong>Use a power</strong> if the card has one (deck draws only)'
+  );
+
+  // --- Power Cards ---
+  const powerDiv = document.createElement('div');
+  powerDiv.innerHTML =
+    '<div class="rules-power">' +
+      '<div class="rules-power-card"><span class="rules-power-rank">7 / 8</span><span class="rules-power-label">Peek</span></div>' +
+      '<div class="rules-power-desc">Look at one of <strong>your own</strong> face-down cards.</div>' +
+    '</div>' +
+    '<div class="rules-power">' +
+      '<div class="rules-power-card"><span class="rules-power-rank">9 / 10</span><span class="rules-power-label">Spy</span></div>' +
+      '<div class="rules-power-desc">Look at one of an <strong>opponent\u2019s</strong> face-down cards.</div>' +
+    '</div>' +
+    '<div class="rules-power">' +
+      '<div class="rules-power-card"><span class="rules-power-rank">J / Q</span><span class="rules-power-label">Blind Swap</span></div>' +
+      '<div class="rules-power-desc">Swap <strong>any two cards</strong> on the table — yours, opponents\u2019, any combination. You do <em>not</em> get to look first!</div>' +
+    '</div>' +
+    '<div class="rules-power">' +
+      '<div class="rules-power-card"><span class="rules-power-rank">K<span class="rules-power-suit">\u2660\u2663</span></span><span class="rules-power-label">Spy &amp; Swap</span></div>' +
+      '<div class="rules-power-desc">Pick one of <strong>your</strong> cards and one of an <strong>opponent\u2019s</strong> cards. Peek at the opponent\u2019s card, then decide: <strong>swap them or keep</strong> both in place.</div>' +
+    '</div>';
+  addSection('Power Cards', powerDiv);
+
+  // --- Matching ---
+  addSection('Matching',
+    'At <strong>any point during your turn</strong>, if you believe one of the face-down cards on the table matches the rank of the <strong>top discard</strong>, you can attempt a match:<br><br>' +
+    '\u2022 <strong>Match your own card</strong> — If correct, the card is removed from your hand (fewer cards = lower score!)<br>' +
+    '\u2022 <strong>Match an opponent\u2019s card</strong> — If correct, their card is discarded and you give them one of yours<br>' +
+    '\u2022 <strong>Wrong guess</strong> — You draw a <strong>penalty card</strong> from the deck as punishment'
+  );
+
+  // --- Calling Cabo ---
+  addSection('Calling Cabo',
+    'At the <strong>end of your turn</strong>, if you believe you have the lowest total, call <strong>CABO</strong>. Every other player gets <strong>one final turn</strong>, then all cards are revealed.'
+  );
+
+  // --- Scoring ---
+  addSection('Scoring',
+    'All cards are flipped and totalled. <strong>Lowest score wins.</strong><br><br>' +
+    '\u2022 Cabo caller has the <strong>lowest score</strong> \u2192 <span class="rules-bonus">\u22125 bonus</span><br>' +
+    '\u2022 Cabo caller does <strong>not</strong> have the lowest score \u2192 <span class="rules-penalty">+5 penalty</span><br>' +
+    '\u2022 Cabo caller <strong>ties</strong> for lowest \u2192 no bonus or penalty'
+  );
+
+  // Bottom close button
+  const btnDiv = document.createElement('div');
+  btnDiv.className = 'rules-buttons';
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'btn btn-primary';
+  closeBtn.textContent = 'Close';
+  closeBtn.addEventListener('click', () => overlay.remove());
+  btnDiv.appendChild(closeBtn);
+  content.appendChild(btnDiv);
+
+  overlay.appendChild(content);
+  document.body.appendChild(overlay);
+}
+
 // ---- Developer Stats ----
 function showDevStats() {
   const existing = document.querySelector('.dev-stats-overlay');
@@ -2495,6 +2638,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const memoryAid = document.getElementById('memory-aid');
   const roundCount = document.getElementById('round-count');
   const customRounds = document.getElementById('custom-rounds');
+  document.getElementById('how-to-play-btn').addEventListener('click', showRulesOverlay);
   roundCount.addEventListener('change', () => {
     customRounds.style.display = roundCount.value === 'custom' ? 'inline-block' : 'none';
   });
