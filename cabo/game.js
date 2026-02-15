@@ -47,7 +47,7 @@ function getCardValue(card) {
 
 function cardName(card) {
   if (!card) return '?';
-  if (card.rank === 'Joker') return isRedSuit(card.suit) ? '\u2605R' : '\u2605B';
+  if (card.rank === 'Joker') return '\u2605J';
   return card.rank + SUIT_SYMBOLS[card.suit];
 }
 
