@@ -429,6 +429,31 @@ function render() {
   if (state.phase === 'game_over') renderGameOver();
 }
 
+function buildPipLayout(count, suit) {
+  // Traditional playing card pip positions: [left%, top%, rotated180]
+  const layouts = {
+    2:  [[50,18,0],[50,82,1]],
+    3:  [[50,18,0],[50,50,0],[50,82,1]],
+    4:  [[30,18,0],[70,18,0],[30,82,1],[70,82,1]],
+    5:  [[30,18,0],[70,18,0],[50,50,0],[30,82,1],[70,82,1]],
+    6:  [[30,18,0],[70,18,0],[30,50,0],[70,50,0],[30,82,1],[70,82,1]],
+    7:  [[30,18,0],[70,18,0],[50,34,0],[30,50,0],[70,50,0],[30,82,1],[70,82,1]],
+    8:  [[30,14,0],[70,14,0],[50,33,0],[30,50,0],[70,50,0],[50,67,1],[30,86,1],[70,86,1]],
+    9:  [[30,14,0],[70,14,0],[30,38,0],[70,38,0],[50,50,0],[30,62,1],[70,62,1],[30,86,1],[70,86,1]],
+    10: [[30,14,0],[70,14,0],[50,27,0],[30,38,0],[70,38,0],[30,62,1],[70,62,1],[50,73,1],[30,86,1],[70,86,1]]
+  };
+  const positions = layouts[count];
+  if (!positions) return '';
+  let html = '';
+  for (const [left, top, rotated] of positions) {
+    const transform = rotated
+      ? 'transform:translate(-50%,-50%) rotate(180deg)'
+      : 'transform:translate(-50%,-50%)';
+    html += '<span class="pip" style="left:' + left + '%;top:' + top + '%;' + transform + '">' + suit + '</span>';
+  }
+  return html;
+}
+
 function createCardElement(card, options) {
   const defaults = { faceUp: false, clickable: false, selected: false, empty: false, highlight: null, memory: null };
   const opts = Object.assign({}, defaults, options);
@@ -453,17 +478,63 @@ function createCardElement(card, options) {
     div.classList.add('card-face-up');
     div.classList.add(isRedSuit(card.suit) ? 'card-red' : 'card-black');
 
+    const suit = SUIT_SYMBOLS[card.suit];
+
+    // Top-left corner: rank + suit stacked
     const topCorner = document.createElement('div');
     topCorner.className = 'card-corner card-corner-top';
-    topCorner.textContent = card.rank + SUIT_SYMBOLS[card.suit];
+    const topRank = document.createElement('div');
+    topRank.className = 'corner-rank';
+    topRank.textContent = card.rank;
+    const topSuit = document.createElement('div');
+    topSuit.className = 'corner-suit';
+    topSuit.textContent = suit;
+    topCorner.appendChild(topRank);
+    topCorner.appendChild(topSuit);
 
+    // Center area
     const center = document.createElement('div');
     center.className = 'card-center';
-    center.textContent = SUIT_SYMBOLS[card.suit];
+    const isFace = ['J', 'Q', 'K'].indexOf(card.rank) !== -1;
+    const isAce = card.rank === 'A';
 
+    if (isFace) {
+      // Face cards: large decorative letter + suit
+      center.classList.add('card-face-center');
+      const faceLabel = document.createElement('div');
+      faceLabel.className = 'face-label';
+      faceLabel.textContent = card.rank;
+      const faceSuit = document.createElement('div');
+      faceSuit.className = 'face-suit';
+      faceSuit.textContent = suit;
+      center.appendChild(faceLabel);
+      center.appendChild(faceSuit);
+    } else if (isAce) {
+      // Ace: single large suit symbol
+      center.classList.add('card-ace-center');
+      const aceSuit = document.createElement('div');
+      aceSuit.className = 'ace-suit';
+      aceSuit.textContent = suit;
+      center.appendChild(aceSuit);
+    } else {
+      // Number cards: pip layout
+      center.classList.add('card-pips');
+      const count = parseInt(card.rank);
+      const pipHTML = buildPipLayout(count, suit);
+      center.innerHTML = pipHTML;
+    }
+
+    // Bottom-right corner: rank + suit stacked, rotated 180
     const bottomCorner = document.createElement('div');
     bottomCorner.className = 'card-corner card-corner-bottom';
-    bottomCorner.textContent = card.rank + SUIT_SYMBOLS[card.suit];
+    const btmRank = document.createElement('div');
+    btmRank.className = 'corner-rank';
+    btmRank.textContent = card.rank;
+    const btmSuit = document.createElement('div');
+    btmSuit.className = 'corner-suit';
+    btmSuit.textContent = suit;
+    bottomCorner.appendChild(btmRank);
+    bottomCorner.appendChild(btmSuit);
 
     div.appendChild(topCorner);
     div.appendChild(center);
@@ -472,6 +543,9 @@ function createCardElement(card, options) {
     div.classList.add('card-face-down');
     const pattern = document.createElement('div');
     pattern.className = 'card-back-pattern';
+    const inner = document.createElement('div');
+    inner.className = 'card-back-inner';
+    pattern.appendChild(inner);
     div.appendChild(pattern);
   }
 
