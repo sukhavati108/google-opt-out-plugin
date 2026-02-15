@@ -2053,47 +2053,11 @@ async function aiUsePower(pIdx, card) {
       state.message = player.name + ' swapped ' + ownPosDesc(pIdx, bestSwap.c1) + ' with ' + cardPosDesc(bestSwap.p2, bestSwap.c2) + '!';
       await flashAiHighlight([key1, key2], 2500);
     } else {
-      // Random swap or skip
-      // Do a random swap
-      const allPositions = [];
-      for (let p = 0; p < state.numPlayers; p++) {
-        for (let c = 0; c < state.players[p].cards.length; c++) {
-          if (state.players[p].cards[c]) allPositions.push({ p, c });
-        }
-      }
-      if (allPositions.length >= 2) {
-        const i1 = Math.floor(Math.random() * allPositions.length);
-        let i2 = Math.floor(Math.random() * (allPositions.length - 1));
-        if (i2 >= i1) i2++;
-        const pos1 = allPositions[i1];
-        const pos2 = allPositions[i2];
-        addLog(player.name + ' swapped ' + cardPosDesc(pos1.p, pos1.c) + ' with ' + cardPosDesc(pos2.p, pos2.c) + '.');
-        state.message = player.name + ' swapped ' + cardPosDesc(pos1.p, pos1.c) + ' with ' + cardPosDesc(pos2.p, pos2.c) + '.';
-
-        const c1 = state.players[pos1.p].cards[pos1.c];
-        const c2 = state.players[pos2.p].cards[pos2.c];
-        state.players[pos1.p].cards[pos1.c] = c2;
-        state.players[pos2.p].cards[pos2.c] = c1;
-
-        const k1 = pos1.p + '-' + pos1.c;
-        const k2 = pos2.p + '-' + pos2.c;
-        for (let ai = 0; ai < state.numPlayers; ai++) {
-          const m1 = state.aiMemory[ai].get(k1);
-          const m2 = state.aiMemory[ai].get(k2);
-          state.aiMemory[ai].delete(k1);
-          state.aiMemory[ai].delete(k2);
-          if (m1) state.aiMemory[ai].set(k2, m1);
-          if (m2) state.aiMemory[ai].set(k1, m2);
-        }
-        const hm1 = state.humanMemory.get(k1);
-        const hm2 = state.humanMemory.get(k2);
-        state.humanMemory.delete(k1);
-        state.humanMemory.delete(k2);
-        if (hm1) state.humanMemory.set(k2, hm1);
-        if (hm2) state.humanMemory.set(k1, hm2);
-
-        await flashAiHighlight([k1, k2], 2500);
-      }
+      // No beneficial cross-player swap available — skip the power
+      addLog(player.name + ' found no useful swap and skipped the power.');
+      state.message = player.name + ' chose not to swap.';
+      render();
+      await delay(2000);
     }
   }
 
