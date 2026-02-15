@@ -142,6 +142,7 @@ function resetState() {
   state.aiProcessing = false;
   state.turnLock = false;
   state.aiHighlights = new Set();
+  state.matchUsedThisTurn = false;
 }
 
 async function flashAiHighlight(keys, ms) {
@@ -380,6 +381,7 @@ function nextTurn() {
   state.powerSwapFirst = null;
   state.peekReveal = null;
   state.turnLock = false;
+  state.matchUsedThisTurn = false;
 
   const player = state.players[state.currentPlayerIndex];
   if (player.isHuman) {
@@ -413,6 +415,12 @@ function finishHumanAction(msg) {
 function returnToDrawDecision(msg) {
   state.phase = 'draw_decision';
   state.message = msg || 'You drew ' + cardName(state.drawnCard) + '. What will you do?';
+  render();
+}
+
+function returnToTurnStart(msg) {
+  state.phase = 'turn_start';
+  state.message = msg || 'Your turn! Draw from the deck or discard pile.';
   render();
 }
 
@@ -749,6 +757,18 @@ function renderActions() {
     return;
   }
 
+  if (state.phase === 'turn_start') {
+    const topDiscard = getTopDiscard();
+    if (topDiscard && !state.matchUsedThisTurn) {
+      addButton(area, 'Match (' + topDiscard.rank + ')', 'btn btn-secondary', () => {
+        state.phase = 'match_select';
+        state.selectedCards.clear();
+        state.message = 'Select cards that are ' + topDiscard.rank + 's (matching ' + cardName(topDiscard) + ' on discard), then Confirm.';
+        render();
+      });
+    }
+  }
+
   if (state.phase === 'turn_end') {
     addButton(area, 'End Turn', 'btn btn-primary', () => {
       nextTurn();
@@ -772,13 +792,6 @@ function renderActions() {
       render();
     });
 
-    addButton(area, 'Match', 'btn btn-secondary', () => {
-      state.phase = 'match_select';
-      state.selectedCards.clear();
-      state.message = 'Select cards that are ' + state.drawnCard.rank + 's, then Confirm.';
-      render();
-    });
-
     addButton(area, 'Discard', 'btn btn-secondary', () => {
       addLog('You discarded ' + cardName(state.drawnCard) + '.');
       discardCard(state.drawnCard);
@@ -799,10 +812,8 @@ function renderActions() {
       resolveMatches();
     });
     addButton(area, 'Cancel', 'btn btn-secondary', () => {
-      state.phase = 'draw_decision';
       state.selectedCards.clear();
-      state.message = 'You drew ' + cardName(state.drawnCard) + '. What will you do?';
-      render();
+      returnToTurnStart('Your turn! Draw from the deck or discard pile.');
     });
   }
 
@@ -1145,7 +1156,8 @@ function resolveMatches() {
     return;
   }
 
-  const drawnRank = state.drawnCard.rank;
+  const topDiscard = getTopDiscard();
+  const matchRank = topDiscard.rank;
   const results = [];
   const correctOwn = [];
   const correctOther = [];
@@ -1158,7 +1170,7 @@ function resolveMatches() {
     const card = state.players[pIdx].cards[cIdx];
     if (!card) continue;
 
-    if (card.rank === drawnRank) {
+    if (card.rank === matchRank) {
       results.push({ pIdx, cIdx, card, correct: true });
       if (pIdx === 0) correctOwn.push({ pIdx, cIdx, card });
       else correctOther.push({ pIdx, cIdx, card });
@@ -1177,7 +1189,7 @@ function resolveMatches() {
 
   // Process wrong matches: penalty cards
   for (const m of wrong) {
-    addLog('Wrong! ' + cardName(m.card) + ' is not a ' + drawnRank + '. Penalty card!');
+    addLog('Wrong! ' + cardName(m.card) + ' is not a ' + matchRank + '. Penalty card!');
     const penalty = drawFromDeck();
     if (penalty) {
       // Add penalty card to human player's hand
@@ -1185,6 +1197,8 @@ function resolveMatches() {
       // Don't let the player see it
     }
   }
+
+  state.matchUsedThisTurn = true;
 
   // Process correct other matches: need to give cards
   if (correctOther.length > 0) {
@@ -1196,25 +1210,29 @@ function resolveMatches() {
       state.pendingGives.push({ pIdx: m.pIdx, cIdx: m.cIdx });
     }
 
-    // Start giving cards (drawn card stays in hand)
+    // Start giving cards
     processNextGive();
     return;
   }
 
-  // No opponent matches, return to draw_decision with card still in hand
+  // No opponent matches, return to turn_start to draw
   let msg = 'Matching done. ';
   msg += correctOwn.length + ' matched';
   if (wrong.length > 0) msg += ', ' + wrong.length + ' penalty card(s)';
-  msg += '. Now swap, discard, or use your drawn card.';
+  msg += '. Now draw from the deck or discard pile.';
 
   state.selectedCards.clear();
-  returnToDrawDecision(msg);
+  returnToTurnStart(msg);
 }
 
 function processNextGive() {
   if (state.pendingGives.length === 0) {
     state.selectedCards.clear();
-    returnToDrawDecision('All matches resolved! Now swap, discard, or use your drawn card.');
+    if (state.drawnCard) {
+      returnToDrawDecision('All matches resolved! Now swap, discard, or use your drawn card.');
+    } else {
+      returnToTurnStart('All matches resolved! Now draw from the deck or discard pile.');
+    }
     return;
   }
 
@@ -1353,6 +1371,16 @@ async function runAiTurn(pIdx) {
   render();
   await delay(2000);
 
+  // Pre-draw matching against top discard
+  const topDiscardForMatch = getTopDiscard();
+  if (topDiscardForMatch) {
+    const matchTargets = findAiMatchTargets(pIdx, topDiscardForMatch);
+    if (matchTargets.length > 0) {
+      await aiPerformMatch(pIdx, topDiscardForMatch, matchTargets);
+      await delay(1000);
+    }
+  }
+
   // Decide draw source
   const topDiscard = getTopDiscard();
   let drawnCard = null;
@@ -1401,38 +1429,31 @@ async function runAiTurn(pIdx) {
       await delay(2000);
     }
   } else {
-    // Try matching first (only for deck draws)
-    const matchTargets = findAiMatchTargets(pIdx, drawnCard);
-    if (matchTargets.length > 0) {
-      await aiPerformMatch(pIdx, drawnCard, matchTargets);
-      state.drawnCard = null;
-    } else {
-      // Decide what to do with drawn card (deck draw)
-      const action = decideAiAction(pIdx, drawnCard, fromDeck);
+    // Decide what to do with drawn card (deck draw)
+    const action = decideAiAction(pIdx, drawnCard, fromDeck);
 
-      if (action.type === 'swap') {
-        const oldCard = player.cards[action.cardIdx];
-        player.cards[action.cardIdx] = drawnCard;
-        setMemory(pIdx, pIdx, action.cardIdx, drawnCard);
-        discardCard(oldCard);
-        addLog(player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.');
-        state.message = player.name + ' placed a card into their hand. Discarded ' + cardName(oldCard) + '.';
-        state.drawnCard = null;
-        await flashAiHighlight(pIdx + '-' + action.cardIdx, 2000);
-      } else if (action.type === 'power') {
-        discardCard(drawnCard);
-        addLog(player.name + ' used ' + cardName(drawnCard) + "'s power.");
-        state.message = player.name + ' used ' + cardName(drawnCard) + "'s power.";
-        render();
-        await delay(2000);
-        await aiUsePower(pIdx, drawnCard);
-      } else {
-        discardCard(drawnCard);
-        addLog(player.name + ' discarded ' + cardName(drawnCard) + '.');
-        state.message = player.name + ' discarded ' + cardName(drawnCard) + '.';
-      }
+    if (action.type === 'swap') {
+      const oldCard = player.cards[action.cardIdx];
+      player.cards[action.cardIdx] = drawnCard;
+      setMemory(pIdx, pIdx, action.cardIdx, drawnCard);
+      discardCard(oldCard);
+      addLog(player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.');
+      state.message = player.name + ' placed a card into their hand. Discarded ' + cardName(oldCard) + '.';
       state.drawnCard = null;
+      await flashAiHighlight(pIdx + '-' + action.cardIdx, 2000);
+    } else if (action.type === 'power') {
+      discardCard(drawnCard);
+      addLog(player.name + ' used ' + cardName(drawnCard) + "'s power.");
+      state.message = player.name + ' used ' + cardName(drawnCard) + "'s power.";
+      render();
+      await delay(2000);
+      await aiUsePower(pIdx, drawnCard);
+    } else {
+      discardCard(drawnCard);
+      addLog(player.name + ' discarded ' + cardName(drawnCard) + '.');
+      state.message = player.name + ' discarded ' + cardName(drawnCard) + '.';
     }
+    state.drawnCard = null;
   }
 
   // After action: check if AI wants to call Cabo
@@ -1605,8 +1626,6 @@ async function aiPerformMatch(pIdx, drawnCard, targets) {
     render();
     await delay(1000);
   }
-
-  discardCard(drawnCard);
 }
 
 function decideAiAction(pIdx, drawnCard, fromDeck) {
