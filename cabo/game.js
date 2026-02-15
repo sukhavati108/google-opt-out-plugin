@@ -492,6 +492,7 @@ function returnToTurnStart(msg) {
 function render() {
   if (state.phase === 'start') return;
   renderScoreboard();
+  renderCaboBanner();
   renderOpponents();
   renderTable();
   renderPlayer();
@@ -908,7 +909,7 @@ function renderActions() {
         state.message = 'You called CABO! Everyone else gets one more turn.';
         addLog('You called CABO!');
         render();
-        setTimeout(() => nextTurn(), 1500);
+        showCaboOverlay('You').then(() => nextTurn());
       });
     }
   }
@@ -1036,6 +1037,53 @@ function addButton(container, text, className, handler) {
   btn.className = className;
   btn.addEventListener('click', handler);
   container.appendChild(btn);
+}
+
+// Show a dramatic full-screen CABO announcement overlay.
+// Returns a Promise that resolves after the overlay fades out (~3.5s total).
+function showCaboOverlay(callerName) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'cabo-overlay';
+
+    const text = document.createElement('div');
+    text.className = 'cabo-overlay-text';
+    text.textContent = 'CABO!';
+
+    const caller = document.createElement('div');
+    caller.className = 'cabo-overlay-caller';
+    caller.textContent = callerName + ' called Cabo!';
+
+    const sub = document.createElement('div');
+    sub.className = 'cabo-overlay-sub';
+    sub.textContent = 'Everyone else gets one more turn.';
+
+    overlay.appendChild(text);
+    overlay.appendChild(caller);
+    overlay.appendChild(sub);
+    document.body.appendChild(overlay);
+
+    setTimeout(() => {
+      overlay.classList.add('fade-out');
+      overlay.addEventListener('animationend', () => {
+        overlay.remove();
+        resolve();
+      });
+    }, 3000);
+  });
+}
+
+// Render the persistent red Cabo banner at the top of the game screen.
+function renderCaboBanner() {
+  const banner = document.getElementById('cabo-banner');
+  if (!banner) return;
+  if (state.caboCallerIndex === null || state.gameOver) {
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = '';
+  const callerName = state.caboCallerIndex === 0 ? 'You' : state.players[state.caboCallerIndex].name;
+  banner.textContent = 'CABO called by ' + callerName + '! ' + state.turnsUntilEnd + ' turn(s) remaining';
 }
 
 function renderLog() {
@@ -1754,7 +1802,7 @@ async function runAiTurn(pIdx) {
     state.message = player.name + ' called CABO!';
     addLog(player.name + ' called CABO!');
     render();
-    await delay(2500);
+    await showCaboOverlay(player.name);
   }
 
   state.aiProcessing = false;

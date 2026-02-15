@@ -237,6 +237,96 @@ body {
   gap: 14px;
 }
 
+/* ---- Cabo Banner (persistent) ---- */
+#cabo-banner {
+  width: 100%;
+  max-width: 900px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #c0392b, #96281b);
+  border: 2px solid #e74c3c;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  animation: cabo-banner-pulse 2s ease-in-out infinite;
+}
+
+@keyframes cabo-banner-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(231, 76, 60, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(231, 76, 60, 0.7); }
+}
+
+/* ---- Cabo Overlay (dramatic announcement) ---- */
+.cabo-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: cabo-overlay-in 0.3s ease-out;
+}
+
+@keyframes cabo-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cabo-overlay-text {
+  font-size: 5rem;
+  font-weight: 900;
+  color: #e74c3c;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-shadow: 0 0 40px rgba(231, 76, 60, 0.8), 0 0 80px rgba(231, 76, 60, 0.4);
+  animation: cabo-text-glow 1s ease-in-out infinite alternate;
+}
+
+@keyframes cabo-text-glow {
+  from { text-shadow: 0 0 30px rgba(231, 76, 60, 0.6), 0 0 60px rgba(231, 76, 60, 0.3); }
+  to   { text-shadow: 0 0 50px rgba(231, 76, 60, 1), 0 0 100px rgba(231, 76, 60, 0.6), 0 0 150px rgba(231, 76, 60, 0.3); }
+}
+
+.cabo-overlay-caller {
+  font-size: 1.6rem;
+  color: #fff;
+  margin-top: 16px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+.cabo-overlay-sub {
+  font-size: 1rem;
+  color: #ccc;
+  margin-top: 10px;
+  font-style: italic;
+}
+
+.cabo-overlay.fade-out {
+  animation: cabo-overlay-out 0.5s ease-in forwards;
+}
+
+@keyframes cabo-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (max-width: 600px) {
+  .cabo-overlay-text {
+    font-size: 3rem;
+  }
+
+  .cabo-overlay-caller {
+    font-size: 1.2rem;
+  }
+}
+
 .scoreboard-player {
   color: #ccc;
   white-space: nowrap;
