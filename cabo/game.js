@@ -369,7 +369,7 @@ function calculateScores() {
 
 function endRound() {
   state.gameOver = true;
-  state.phase = 'game_over';
+  state.phase = 'round_reveal';
   calculateScores();
 
   // Accumulate into match totals
@@ -380,9 +380,11 @@ function endRound() {
 
   const isMultiRound = match.totalRounds > 1;
   state.message = isMultiRound
+    ? 'Round ' + match.currentRound + ' of ' + match.totalRounds + ' complete! All cards revealed.'
+    : 'Game Over! All cards revealed.';
+  addLog(isMultiRound
     ? 'Round ' + match.currentRound + ' of ' + match.totalRounds + ' complete!'
-    : 'Game Over!';
-  addLog(state.message);
+    : 'Game Over!');
   if (state.caboCallerIndex !== null) {
     const caller = state.scores.find(s => s.playerIndex === state.caboCallerIndex);
     if (caller.caboBonus === -5) {
@@ -711,7 +713,7 @@ function renderOpponents() {
       }
 
       const isPeekRevealed = state.peekReveal && state.peekReveal.pIdx === p && state.peekReveal.cIdx === c;
-      const showFace = state.phase === 'game_over' || isPeekRevealed;
+      const showFace = state.phase === 'game_over' || state.phase === 'round_reveal' || isPeekRevealed;
       const key = p + '-' + c;
       const mem = state.humanMemory.get(key);
       const memStr = mem && !showFace ? cardName(mem) : null;
@@ -827,7 +829,7 @@ function renderPlayer() {
     const key = '0-' + c;
     const isPeekRevealed = state.peekReveal && state.peekReveal.pIdx === 0 && state.peekReveal.cIdx === c;
     const showFace = state.phase === 'peek' && (c === 2 || c === 3);
-    const showFaceGameOver = state.phase === 'game_over';
+    const showFaceGameOver = state.phase === 'game_over' || state.phase === 'round_reveal';
     const isFaceUp = showFace || showFaceGameOver || isPeekRevealed;
     const mem = state.humanMemory.get(key);
     const memStr = mem && !isFaceUp ? cardName(mem) : null;
@@ -871,6 +873,14 @@ function renderActions() {
       state.phase = 'turn_start';
       state.message = 'Your turn! Draw from the deck or discard pile.';
       addLog('You memorized your bottom cards. Game begins!');
+      render();
+    });
+    return;
+  }
+
+  if (state.phase === 'round_reveal') {
+    addButton(area, 'Show Scores', 'btn btn-primary', () => {
+      state.phase = 'game_over';
       render();
     });
     return;
