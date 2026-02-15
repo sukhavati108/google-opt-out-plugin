@@ -2455,7 +2455,7 @@ function showRulesOverlay() {
     '</div>' +
     '<div class="rules-power">' +
       '<div class="rules-power-card"><span class="rules-power-rank">K<span class="rules-power-suit">\u2660\u2663</span></span><span class="rules-power-label">Spy &amp; Swap</span></div>' +
-      '<div class="rules-power-desc">Pick one of <strong>your</strong> cards and one of an <strong>opponent\u2019s</strong> cards. Peek at the opponent\u2019s card, then decide: <strong>swap them or keep</strong> both in place.</div>' +
+      '<div class="rules-power-desc">Pick one of <strong>your</strong> cards and one of an <strong>opponent\u2019s</strong> cards. Choose to peek at <strong>either</strong> your card <strong>or</strong> the opponent\u2019s card (not both). Then decide: <strong>swap them or keep</strong> both in place.</div>' +
     '</div>';
   addSection('Power Cards', powerDiv);
 
