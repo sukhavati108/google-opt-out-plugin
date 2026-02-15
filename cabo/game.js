@@ -2231,9 +2231,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const memoryAid = document.getElementById('memory-aid');
   const roundCount = document.getElementById('round-count');
   const customRounds = document.getElementById('custom-rounds');
-  const logToggle = document.getElementById('log-toggle');
-  const logContent = document.getElementById('log-content');
-
   roundCount.addEventListener('change', () => {
     customRounds.style.display = roundCount.value === 'custom' ? 'inline-block' : 'none';
   });
@@ -2251,13 +2248,4 @@ document.addEventListener('DOMContentLoaded', () => {
     startMatch(numPlayers, totalRounds);
   });
 
-  logToggle.addEventListener('click', () => {
-    if (logContent.style.display === 'none') {
-      logContent.style.display = '';
-      logToggle.textContent = 'Hide Log';
-    } else {
-      logContent.style.display = 'none';
-      logToggle.textContent = 'Game Log';
-    }
-  });
 });

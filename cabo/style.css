@@ -595,25 +595,31 @@ body {
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  width: 180px;
+  width: 240px;
   text-align: left;
   z-index: 10;
 }
 
+#log-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #f1c40f;
+  padding: 0 2px 4px;
+}
+
 #log-content {
-  margin-top: 8px;
-  background: rgba(0,0,0,0.45);
+  background: rgba(0,0,0,0.5);
   border-radius: 8px;
-  padding: 10px;
-  max-height: 220px;
+  padding: 12px 14px;
+  max-height: 320px;
   overflow-y: auto;
   text-align: left;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: #999;
 }
 
 #log-content div {
-  padding: 2px 0;
+  padding: 3px 0;
   border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 
@@ -791,7 +797,11 @@ body {
     transform: none;
     width: 100%;
     max-width: 500px;
-    text-align: center;
+    text-align: left;
     margin-top: 10px;
+  }
+
+  #log-label {
+    text-align: center;
   }
 }
