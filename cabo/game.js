@@ -21,6 +21,9 @@ function createDeck() {
       deck.push(createCard(rank, suit));
     }
   }
+  // Add two Jokers: one red, one black
+  deck.push(createCard('Joker', 'hearts'));
+  deck.push(createCard('Joker', 'spades'));
   return deck;
 }
 
@@ -34,6 +37,7 @@ function shuffle(arr) {
 
 function getCardValue(card) {
   if (!card) return 0;
+  if (card.rank === 'Joker') return -1;
   if (card.rank === 'A') return 1;
   if (card.rank === 'J') return 11;
   if (card.rank === 'Q') return 12;
@@ -43,7 +47,12 @@ function getCardValue(card) {
 
 function cardName(card) {
   if (!card) return '?';
+  if (card.rank === 'Joker') return isRedSuit(card.suit) ? '\u2605R' : '\u2605B';
   return card.rank + SUIT_SYMBOLS[card.suit];
+}
+
+function isJoker(card) {
+  return card && card.rank === 'Joker';
 }
 
 function isOneEyedKing(card) {
@@ -499,69 +508,107 @@ function createCardElement(card, options) {
 
   if (opts.faceUp) {
     div.classList.add('card-face-up');
-    div.classList.add(isRedSuit(card.suit) ? 'card-red' : 'card-black');
 
-    const suit = SUIT_SYMBOLS[card.suit];
+    if (card.rank === 'Joker') {
+      // Joker: distinctive display
+      div.classList.add(isRedSuit(card.suit) ? 'card-red' : 'card-black');
+      div.classList.add('card-joker');
 
-    // Top-left corner: rank + suit stacked
-    const topCorner = document.createElement('div');
-    topCorner.className = 'card-corner card-corner-top';
-    const topRank = document.createElement('div');
-    topRank.className = 'corner-rank';
-    topRank.textContent = card.rank;
-    const topSuit = document.createElement('div');
-    topSuit.className = 'corner-suit';
-    topSuit.textContent = suit;
-    topCorner.appendChild(topRank);
-    topCorner.appendChild(topSuit);
+      const topCorner = document.createElement('div');
+      topCorner.className = 'card-corner card-corner-top';
+      const topRank = document.createElement('div');
+      topRank.className = 'corner-rank';
+      topRank.textContent = '\u2605';
+      topCorner.appendChild(topRank);
 
-    // Center area
-    const center = document.createElement('div');
-    center.className = 'card-center';
-    const isFace = ['J', 'Q', 'K'].indexOf(card.rank) !== -1;
-    const isAce = card.rank === 'A';
-
-    if (isFace) {
-      // Face cards: large decorative letter + suit
-      center.classList.add('card-face-center');
+      const center = document.createElement('div');
+      center.className = 'card-center card-face-center';
       const faceLabel = document.createElement('div');
       faceLabel.className = 'face-label';
-      faceLabel.textContent = card.rank;
+      faceLabel.style.fontSize = '1.4em';
+      faceLabel.textContent = '\u2605';
       const faceSuit = document.createElement('div');
       faceSuit.className = 'face-suit';
-      faceSuit.textContent = suit;
+      faceSuit.style.fontSize = '0.65em';
+      faceSuit.textContent = 'JOKER';
       center.appendChild(faceLabel);
       center.appendChild(faceSuit);
-    } else if (isAce) {
-      // Ace: single large suit symbol
-      center.classList.add('card-ace-center');
-      const aceSuit = document.createElement('div');
-      aceSuit.className = 'ace-suit';
-      aceSuit.textContent = suit;
-      center.appendChild(aceSuit);
+
+      const bottomCorner = document.createElement('div');
+      bottomCorner.className = 'card-corner card-corner-bottom';
+      const btmRank = document.createElement('div');
+      btmRank.className = 'corner-rank';
+      btmRank.textContent = '\u2605';
+      bottomCorner.appendChild(btmRank);
+
+      div.appendChild(topCorner);
+      div.appendChild(center);
+      div.appendChild(bottomCorner);
     } else {
-      // Number cards: pip layout
-      center.classList.add('card-pips');
-      const count = parseInt(card.rank);
-      const pipHTML = buildPipLayout(count, suit);
-      center.innerHTML = pipHTML;
+      div.classList.add(isRedSuit(card.suit) ? 'card-red' : 'card-black');
+
+      const suit = SUIT_SYMBOLS[card.suit];
+
+      // Top-left corner: rank + suit stacked
+      const topCorner = document.createElement('div');
+      topCorner.className = 'card-corner card-corner-top';
+      const topRank = document.createElement('div');
+      topRank.className = 'corner-rank';
+      topRank.textContent = card.rank;
+      const topSuit = document.createElement('div');
+      topSuit.className = 'corner-suit';
+      topSuit.textContent = suit;
+      topCorner.appendChild(topRank);
+      topCorner.appendChild(topSuit);
+
+      // Center area
+      const center = document.createElement('div');
+      center.className = 'card-center';
+      const isFace = ['J', 'Q', 'K'].indexOf(card.rank) !== -1;
+      const isAce = card.rank === 'A';
+
+      if (isFace) {
+        // Face cards: large decorative letter + suit
+        center.classList.add('card-face-center');
+        const faceLabel = document.createElement('div');
+        faceLabel.className = 'face-label';
+        faceLabel.textContent = card.rank;
+        const faceSuit = document.createElement('div');
+        faceSuit.className = 'face-suit';
+        faceSuit.textContent = suit;
+        center.appendChild(faceLabel);
+        center.appendChild(faceSuit);
+      } else if (isAce) {
+        // Ace: single large suit symbol
+        center.classList.add('card-ace-center');
+        const aceSuit = document.createElement('div');
+        aceSuit.className = 'ace-suit';
+        aceSuit.textContent = suit;
+        center.appendChild(aceSuit);
+      } else {
+        // Number cards: pip layout
+        center.classList.add('card-pips');
+        const count = parseInt(card.rank);
+        const pipHTML = buildPipLayout(count, suit);
+        center.innerHTML = pipHTML;
+      }
+
+      // Bottom-right corner: rank + suit stacked, rotated 180
+      const bottomCorner = document.createElement('div');
+      bottomCorner.className = 'card-corner card-corner-bottom';
+      const btmRank = document.createElement('div');
+      btmRank.className = 'corner-rank';
+      btmRank.textContent = card.rank;
+      const btmSuit = document.createElement('div');
+      btmSuit.className = 'corner-suit';
+      btmSuit.textContent = suit;
+      bottomCorner.appendChild(btmRank);
+      bottomCorner.appendChild(btmSuit);
+
+      div.appendChild(topCorner);
+      div.appendChild(center);
+      div.appendChild(bottomCorner);
     }
-
-    // Bottom-right corner: rank + suit stacked, rotated 180
-    const bottomCorner = document.createElement('div');
-    bottomCorner.className = 'card-corner card-corner-bottom';
-    const btmRank = document.createElement('div');
-    btmRank.className = 'corner-rank';
-    btmRank.textContent = card.rank;
-    const btmSuit = document.createElement('div');
-    btmSuit.className = 'corner-suit';
-    btmSuit.textContent = suit;
-    bottomCorner.appendChild(btmRank);
-    bottomCorner.appendChild(btmSuit);
-
-    div.appendChild(topCorner);
-    div.appendChild(center);
-    div.appendChild(bottomCorner);
   } else {
     div.classList.add('card-face-down');
     const pattern = document.createElement('div');
@@ -1651,6 +1698,8 @@ function findAiDiscardSwapTarget(pIdx, card) {
     const key = pIdx + '-' + c;
     const known = mem.get(key);
     if (known) {
+      // Never swap out a Joker
+      if (known.rank === 'Joker') continue;
       const val = getCardValue(known);
       if (val > value && val > worstVal) {
         worstVal = val;
@@ -1676,6 +1725,9 @@ function shouldAiTakeDiscard(pIdx, topDiscard) {
   const value = getCardValue(topDiscard);
   const mem = state.aiMemory[pIdx];
   const cards = state.players[pIdx].cards;
+
+  // Always take a Joker — it's the best card
+  if (isJoker(topDiscard)) return true;
 
   // Take low-value cards or one-eyed king if we have a known high card
   if (value > 4 && !isOneEyedKing(topDiscard)) return false;
@@ -1744,14 +1796,15 @@ async function aiPerformMatch(pIdx, drawnCard, targets) {
         state.players[t.pIdx].cards[t.cIdx] = null;
         clearMemoryAt(t.pIdx, t.cIdx);
 
-        // Give worst card from own hand
+        // Give worst card from own hand (never give a known Joker)
         const ownCards = nonNullCardIndices(pIdx);
         if (ownCards.length > 0) {
           let worstIdx = ownCards[0];
-          let worstVal = -1;
+          let worstVal = -Infinity;
           for (const ci of ownCards) {
             const key = pIdx + '-' + ci;
             const known = state.aiMemory[pIdx].get(key);
+            if (known && known.rank === 'Joker') continue;
             const val = known ? getCardValue(known) : 7;
             if (val > worstVal) {
               worstVal = val;
@@ -1779,7 +1832,7 @@ function decideAiAction(pIdx, drawnCard, fromDeck) {
   const cards = state.players[pIdx].cards;
   const drawnValue = getCardValue(drawnCard);
 
-  // Find worst known card
+  // Find worst known card (never consider Jokers as swap candidates)
   let worstIdx = -1;
   let worstVal = -1;
   let unknownIndices = [];
@@ -1789,6 +1842,7 @@ function decideAiAction(pIdx, drawnCard, fromDeck) {
     const key = pIdx + '-' + c;
     const known = mem.get(key);
     if (known) {
+      if (known.rank === 'Joker') continue; // Never swap out a Joker
       const val = getCardValue(known);
       if (val > worstVal) {
         worstVal = val;
@@ -1797,6 +1851,18 @@ function decideAiAction(pIdx, drawnCard, fromDeck) {
     } else {
       unknownIndices.push(c);
     }
+  }
+
+  // Joker (-1 pts): always keep — swap with worst known or an unknown
+  if (isJoker(drawnCard)) {
+    if (worstIdx >= 0 && worstVal > -1) {
+      return { type: 'swap', cardIdx: worstIdx };
+    }
+    if (unknownIndices.length > 0) {
+      return { type: 'swap', cardIdx: unknownIndices[Math.floor(Math.random() * unknownIndices.length)] };
+    }
+    // All known cards are Jokers/Red Kings — still swap with highest
+    if (worstIdx >= 0) return { type: 'swap', cardIdx: worstIdx };
   }
 
   // One-eyed king: always swap with worst card
@@ -1909,6 +1975,7 @@ async function aiUsePower(pIdx, card) {
       const ownKey = pIdx + '-' + c;
       const ownKnown = mem.get(ownKey);
       if (!ownKnown) continue;
+      if (ownKnown.rank === 'Joker') continue; // Never swap away a Joker
       const ownVal = getCardValue(ownKnown);
 
       for (let p = 0; p < state.numPlayers; p++) {
@@ -2028,17 +2095,18 @@ async function aiUseBlackKingPower(pIdx) {
   }
   if (ownCards.length === 0 || oppCards.length === 0) return;
 
-  // Pick own card: prefer unknown, then highest known
+  // Pick own card: prefer unknown, then highest known (never pick a known Joker)
   let ownIdx;
   const ownUnknowns = ownCards.filter(c => !mem.has(pIdx + '-' + c));
   if (ownUnknowns.length > 0) {
     ownIdx = ownUnknowns[Math.floor(Math.random() * ownUnknowns.length)];
   } else {
-    // Pick the highest valued known card
+    // Pick the highest valued known card, excluding Jokers
     let bestIdx = ownCards[0];
-    let bestVal = -1;
+    let bestVal = -Infinity;
     for (const ci of ownCards) {
       const known = mem.get(pIdx + '-' + ci);
+      if (known && known.rank === 'Joker') continue;
       const val = known ? getCardValue(known) : 0;
       if (val > bestVal) { bestVal = val; bestIdx = ci; }
     }
