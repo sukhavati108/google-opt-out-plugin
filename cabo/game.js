@@ -1735,6 +1735,7 @@ async function runAiTurn(pIdx) {
       const oldCard = player.cards[swapIdx];
       player.cards[swapIdx] = drawnCard;
       setMemory(pIdx, pIdx, swapIdx, drawnCard);
+      state.humanMemory.delete(pIdx + '-' + swapIdx); // Human sees swap but doesn't know new card
       discardCard(oldCard);
       addLog(player.name + ' placed ' + cardName(drawnCard) + ' into ' + ownPosDesc(pIdx, swapIdx) + ' slot. Discarded ' + cardName(oldCard) + '.');
       state.message = player.name + ' placed ' + cardName(drawnCard) + ' into their hand. Discarded ' + cardName(oldCard) + '.';
@@ -1758,6 +1759,7 @@ async function runAiTurn(pIdx) {
       const oldCard = player.cards[action.cardIdx];
       player.cards[action.cardIdx] = drawnCard;
       setMemory(pIdx, pIdx, action.cardIdx, drawnCard);
+      state.humanMemory.delete(pIdx + '-' + action.cardIdx); // Human sees swap but doesn't know new card
       discardCard(oldCard);
       addLog(player.name + ' swapped ' + ownPosDesc(pIdx, action.cardIdx) + ' with drawn card. Discarded ' + cardName(oldCard) + '.');
       state.message = player.name + ' placed a card into their hand. Discarded ' + cardName(oldCard) + '.';
@@ -2171,13 +2173,9 @@ async function aiUsePower(pIdx, card) {
         if (m1) state.aiMemory[ai].set(key2, m1);
         if (m2) state.aiMemory[ai].set(key1, m2);
       }
-      // Update human memory
-      const hm1 = state.humanMemory.get(key1);
-      const hm2 = state.humanMemory.get(key2);
+      // Human sees the swap but doesn't know what cards moved — clear both positions
       state.humanMemory.delete(key1);
       state.humanMemory.delete(key2);
-      if (hm1) state.humanMemory.set(key2, hm1);
-      if (hm2) state.humanMemory.set(key1, hm2);
 
       addLog(player.name + ' swapped ' + ownPosDesc(pIdx, bestSwap.c1) + ' with ' + cardPosDesc(bestSwap.p2, bestSwap.c2) + '!');
       state.message = player.name + ' swapped ' + ownPosDesc(pIdx, bestSwap.c1) + ' with ' + cardPosDesc(bestSwap.p2, bestSwap.c2) + '!';
@@ -2310,12 +2308,8 @@ async function aiUseBlackKingPower(pIdx) {
       if (m1) state.aiMemory[ai].set(oppKey, m1);
       if (m2) state.aiMemory[ai].set(ownKey, m2);
     }
-    const hm1 = state.humanMemory.get(ownKey);
-    const hm2 = state.humanMemory.get(oppKey);
     state.humanMemory.delete(ownKey);
     state.humanMemory.delete(oppKey);
-    if (hm1) state.humanMemory.set(oppKey, hm1);
-    if (hm2) state.humanMemory.set(ownKey, hm2);
 
     addLog(player.name + ' swapped ' + ownPosDesc(pIdx, ownIdx) + ' with ' + cardPosDesc(oppTarget.p, oppTarget.c) + '!');
     state.message = player.name + ' swapped ' + ownPosDesc(pIdx, ownIdx) + ' with ' + cardPosDesc(oppTarget.p, oppTarget.c) + '!';
