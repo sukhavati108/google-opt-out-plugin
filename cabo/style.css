@@ -342,6 +342,20 @@ body {
   max-width: 1100px;
 }
 
+#opponents-area[data-opponents="4"] {
+  gap: 16px;
+}
+
+#opponents-area[data-opponents="4"] .card {
+  width: 90px;
+  height: 126px;
+}
+
+#opponents-area[data-opponents="4"] .opponent-cards {
+  column-gap: 3px;
+  row-gap: 14px;
+}
+
 .opponent {
   display: flex;
   flex-direction: column;
@@ -887,6 +901,15 @@ body {
 
   #opponents-area {
     gap: 15px;
+  }
+
+  #opponents-area[data-opponents="4"] {
+    gap: 8px;
+  }
+
+  #opponents-area[data-opponents="4"] .card {
+    width: 68px;
+    height: 95px;
   }
 
   .start-content h1 {

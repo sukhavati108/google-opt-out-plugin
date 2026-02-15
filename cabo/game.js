@@ -686,6 +686,7 @@ function createCardElement(card, options) {
 function renderOpponents() {
   const area = document.getElementById('opponents-area');
   area.innerHTML = '';
+  area.setAttribute('data-opponents', state.numPlayers - 1);
 
   for (let p = 1; p < state.numPlayers; p++) {
     const player = state.players[p];
