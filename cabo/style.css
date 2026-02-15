@@ -591,21 +591,24 @@ body {
 
 /* ---- Log Area ---- */
 #log-area {
-  margin-top: 10px;
-  text-align: center;
-  max-width: 500px;
-  width: 100%;
+  position: fixed;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 180px;
+  text-align: left;
+  z-index: 10;
 }
 
 #log-content {
   margin-top: 8px;
-  background: rgba(0,0,0,0.3);
+  background: rgba(0,0,0,0.45);
   border-radius: 8px;
   padding: 10px;
-  max-height: 150px;
+  max-height: 220px;
   overflow-y: auto;
   text-align: left;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: #999;
 }
 
@@ -781,5 +784,14 @@ body {
   #drawn-card-area {
     min-width: 90px;
     min-height: 112px;
+  }
+
+  #log-area {
+    position: static;
+    transform: none;
+    width: 100%;
+    max-width: 500px;
+    text-align: center;
+    margin-top: 10px;
   }
 }
