@@ -242,6 +242,32 @@ function addLog(msg) {
   if (state.log.length > 80) state.log.shift();
 }
 
+// Returns a human-readable position label for a card slot.
+// For 4-card hands: top-left, top-right, bottom-left, bottom-right
+// For other sizes: position 1, position 2, etc.
+function posLabel(cardCount, idx) {
+  if (cardCount === 4) {
+    const names = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+    return names[idx] || ('position ' + (idx + 1));
+  }
+  return 'position ' + (idx + 1);
+}
+
+// Build a description like "your top-left card" or "Coco's bottom-right card"
+function cardPosDesc(pIdx, cIdx) {
+  const count = state.players[pIdx].cards.length;
+  const pos = posLabel(count, cIdx);
+  const owner = pIdx === 0 ? 'your' : state.players[pIdx].name + "'s";
+  return owner + ' ' + pos + ' card';
+}
+
+// Build a description for own card from the acting AI's perspective
+function ownPosDesc(pIdx, cIdx) {
+  const count = state.players[pIdx].cards.length;
+  const pos = posLabel(count, cIdx);
+  return 'their ' + pos + ' card';
+}
+
 function getTopDiscard() {
   return state.discardPile.length > 0 ? state.discardPile[state.discardPile.length - 1] : null;
 }
@@ -1595,7 +1621,7 @@ async function runAiTurn(pIdx) {
       player.cards[swapIdx] = drawnCard;
       setMemory(pIdx, pIdx, swapIdx, drawnCard);
       discardCard(oldCard);
-      addLog(player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.');
+      addLog(player.name + ' placed ' + cardName(drawnCard) + ' into ' + ownPosDesc(pIdx, swapIdx) + ' slot. Discarded ' + cardName(oldCard) + '.');
       state.message = player.name + ' placed ' + cardName(drawnCard) + ' into their hand. Discarded ' + cardName(oldCard) + '.';
       state.drawnCard = null;
       await flashAiHighlight(pIdx + '-' + swapIdx, 2000);
@@ -1616,7 +1642,7 @@ async function runAiTurn(pIdx) {
       player.cards[action.cardIdx] = drawnCard;
       setMemory(pIdx, pIdx, action.cardIdx, drawnCard);
       discardCard(oldCard);
-      addLog(player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.');
+      addLog(player.name + ' swapped ' + ownPosDesc(pIdx, action.cardIdx) + ' with drawn card. Discarded ' + cardName(oldCard) + '.');
       state.message = player.name + ' placed a card into their hand. Discarded ' + cardName(oldCard) + '.';
       state.drawnCard = null;
       await flashAiHighlight(pIdx + '-' + action.cardIdx, 2000);
@@ -1780,7 +1806,8 @@ async function aiPerformMatch(pIdx, drawnCard, targets) {
 
     if (card.rank === drawnCard.rank) {
       // Correct match — highlight the matched card
-      const matchMsg = player.name + ' matched ' + (t.pIdx === pIdx ? 'their own' : state.players[t.pIdx].name + "'s") + ' ' + cardName(card) + '!';
+      const posDesc = t.pIdx === pIdx ? ownPosDesc(pIdx, t.cIdx) : cardPosDesc(t.pIdx, t.cIdx);
+      const matchMsg = player.name + ' matched ' + posDesc + ' (' + cardName(card) + ')!';
       addLog(matchMsg);
       state.message = matchMsg;
       await flashAiHighlight(t.pIdx + '-' + t.cIdx, 2000);
@@ -1817,6 +1844,7 @@ async function aiPerformMatch(pIdx, drawnCard, targets) {
           clearMemoryAt(pIdx, worstIdx);
           clearMemoryAt(t.pIdx, t.cIdx);
           // Highlight both the given-to slot and the emptied slot
+          addLog(player.name + ' gave ' + ownPosDesc(pIdx, worstIdx) + ' to ' + cardPosDesc(t.pIdx, t.cIdx) + ' slot.');
           state.message = player.name + ' gave a card to ' + state.players[t.pIdx].name + '.';
           await flashAiHighlight([t.pIdx + '-' + t.cIdx, pIdx + '-' + worstIdx], 2000);
         }
@@ -1942,8 +1970,8 @@ async function aiUsePower(pIdx, card) {
       const cIdx = unknowns[Math.floor(Math.random() * unknowns.length)];
       const peeked = player.cards[cIdx];
       setMemory(pIdx, pIdx, cIdx, peeked);
-      addLog(player.name + ' peeked at one of their own cards.');
-      state.message = player.name + ' peeked at one of their own cards.';
+      addLog(player.name + ' peeked at ' + ownPosDesc(pIdx, cIdx) + '.');
+      state.message = player.name + ' peeked at ' + ownPosDesc(pIdx, cIdx) + '.';
       await flashAiHighlight(pIdx + '-' + cIdx, 2000);
     }
   } else if (powerType === 'peek_other') {
@@ -1960,9 +1988,8 @@ async function aiUsePower(pIdx, card) {
       const t = targets[Math.floor(Math.random() * targets.length)];
       const peeked = state.players[t.p].cards[t.c];
       setMemory(pIdx, t.p, t.c, peeked);
-      const targetName = t.p === 0 ? 'your' : state.players[t.p].name + "'s";
-      addLog(player.name + ' peeked at ' + targetName + ' card.');
-      state.message = player.name + ' peeked at one of ' + targetName + ' cards.';
+      addLog(player.name + ' peeked at ' + cardPosDesc(t.p, t.c) + '.');
+      state.message = player.name + ' peeked at ' + cardPosDesc(t.p, t.c) + '.';
       await flashAiHighlight(t.p + '-' + t.c, 2000);
     }
   } else if (powerType === 'swap_cards') {
@@ -2022,15 +2049,11 @@ async function aiUsePower(pIdx, card) {
       if (hm1) state.humanMemory.set(key2, hm1);
       if (hm2) state.humanMemory.set(key1, hm2);
 
-      const name2 = bestSwap.p2 === 0 ? 'your' : state.players[bestSwap.p2].name + "'s";
-      addLog(player.name + ' swapped their card with ' + name2 + ' card!');
-      state.message = player.name + ' swapped their card with ' + name2 + ' card!';
+      addLog(player.name + ' swapped ' + ownPosDesc(pIdx, bestSwap.c1) + ' with ' + cardPosDesc(bestSwap.p2, bestSwap.c2) + '!');
+      state.message = player.name + ' swapped ' + ownPosDesc(pIdx, bestSwap.c1) + ' with ' + cardPosDesc(bestSwap.p2, bestSwap.c2) + '!';
       await flashAiHighlight([key1, key2], 2500);
     } else {
       // Random swap or skip
-      addLog(player.name + ' swapped two cards on the table.');
-      state.message = player.name + ' swapped two cards randomly.';
-
       // Do a random swap
       const allPositions = [];
       for (let p = 0; p < state.numPlayers; p++) {
@@ -2044,6 +2067,8 @@ async function aiUsePower(pIdx, card) {
         if (i2 >= i1) i2++;
         const pos1 = allPositions[i1];
         const pos2 = allPositions[i2];
+        addLog(player.name + ' swapped ' + cardPosDesc(pos1.p, pos1.c) + ' with ' + cardPosDesc(pos2.p, pos2.c) + '.');
+        state.message = player.name + ' swapped ' + cardPosDesc(pos1.p, pos1.c) + ' with ' + cardPosDesc(pos2.p, pos2.c) + '.';
 
         const c1 = state.players[pos1.p].cards[pos1.c];
         const c2 = state.players[pos2.p].cards[pos2.c];
@@ -2133,7 +2158,7 @@ async function aiUseBlackKingPower(pIdx) {
   const oppKey = oppTarget.p + '-' + oppTarget.c;
   const oppPlayerName = oppTarget.p === 0 ? 'your' : state.players[oppTarget.p].name + "'s";
 
-  addLog(player.name + ' selected a card and ' + oppPlayerName + ' card for Spy & Swap.');
+  addLog(player.name + ' selected ' + ownPosDesc(pIdx, ownIdx) + ' and ' + cardPosDesc(oppTarget.p, oppTarget.c) + ' for Spy & Swap.');
   state.message = player.name + ' is using Spy & Swap...';
   await flashAiHighlight([ownKey, oppKey], 2000);
 
@@ -2157,10 +2182,9 @@ async function aiUseBlackKingPower(pIdx) {
     setMemory(pIdx, peekTarget.p, peekTarget.c, peekedCard);
   }
 
-  const peekName = peekTarget.p === pIdx ? 'their own' :
-    (peekTarget.p === 0 ? 'your' : state.players[peekTarget.p].name + "'s");
-  addLog(player.name + ' peeked at ' + peekName + ' card.');
-  state.message = player.name + ' peeked at ' + peekName + ' card.';
+  const peekDesc = peekTarget.p === pIdx ? ownPosDesc(pIdx, peekTarget.c) : cardPosDesc(peekTarget.p, peekTarget.c);
+  addLog(player.name + ' peeked at ' + peekDesc + '.');
+  state.message = player.name + ' peeked at ' + peekDesc + '.';
   await flashAiHighlight(peekTarget.p + '-' + peekTarget.c, 2000);
 
   // Step 3: Decide whether to swap
@@ -2195,8 +2219,8 @@ async function aiUseBlackKingPower(pIdx) {
     if (hm1) state.humanMemory.set(oppKey, hm1);
     if (hm2) state.humanMemory.set(ownKey, hm2);
 
-    addLog(player.name + ' swapped their card with ' + oppPlayerName + ' card!');
-    state.message = player.name + ' swapped their card with ' + oppPlayerName + ' card!';
+    addLog(player.name + ' swapped ' + ownPosDesc(pIdx, ownIdx) + ' with ' + cardPosDesc(oppTarget.p, oppTarget.c) + '!');
+    state.message = player.name + ' swapped ' + ownPosDesc(pIdx, ownIdx) + ' with ' + cardPosDesc(oppTarget.p, oppTarget.c) + '!';
     await flashAiHighlight([ownKey, oppKey], 2500);
   } else {
     addLog(player.name + ' chose not to swap.');
