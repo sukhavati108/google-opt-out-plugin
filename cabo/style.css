@@ -713,6 +713,11 @@ body {
   border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 
+#log-content div.log-cabo {
+  color: #e74c3c;
+  font-weight: 700;
+}
+
 #log-content div:last-child {
   border-bottom: none;
   color: #ccc;

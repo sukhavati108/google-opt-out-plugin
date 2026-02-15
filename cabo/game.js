@@ -1092,6 +1092,9 @@ function renderLog() {
   for (const entry of state.log) {
     const div = document.createElement('div');
     div.textContent = entry;
+    if (entry.indexOf('called CABO!') !== -1) {
+      div.classList.add('log-cabo');
+    }
     logContent.appendChild(div);
   }
   logContent.scrollTop = logContent.scrollHeight;
