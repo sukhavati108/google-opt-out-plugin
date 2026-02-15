@@ -1169,6 +1169,23 @@ function renderGameOver() {
   table.appendChild(tbody);
   content.appendChild(table);
 
+  // Memory aid toggle (show when there are more rounds to play)
+  if (isMultiRound && !isMatchEnd) {
+    const toggleDiv = document.createElement('div');
+    toggleDiv.className = 'memory-aid-toggle';
+    const label = document.createElement('label');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = showMemoryAids;
+    checkbox.addEventListener('change', () => {
+      showMemoryAids = checkbox.checked;
+    });
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(' Show memory aids'));
+    toggleDiv.appendChild(label);
+    content.appendChild(toggleDiv);
+  }
+
   // Buttons
   const btnDiv = document.createElement('div');
   btnDiv.className = 'game-over-buttons';

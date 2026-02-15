@@ -655,6 +655,22 @@ body {
   margin-bottom: 16px;
 }
 
+.memory-aid-toggle {
+  margin: 12px 0 4px;
+  text-align: center;
+}
+
+.memory-aid-toggle label {
+  font-size: 0.9rem;
+  color: #ccc;
+  cursor: pointer;
+}
+
+.memory-aid-toggle input[type="checkbox"] {
+  margin-right: 6px;
+  transform: scale(1.1);
+}
+
 .game-over-buttons {
   display: flex;
   gap: 10px;
