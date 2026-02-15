@@ -27,6 +27,16 @@
             Show memory aids (remembered card values)
           </label>
         </div>
+        <div class="start-options">
+          <label for="round-count">Rounds per match:</label>
+          <select id="round-count">
+            <option value="1">1 Round</option>
+            <option value="5" selected>5 Rounds</option>
+            <option value="10">10 Rounds</option>
+            <option value="custom">Custom</option>
+          </select>
+          <input type="number" id="custom-rounds" min="1" max="99" value="3" style="display:none">
+        </div>
         <button id="start-btn" class="btn btn-primary">Start Game</button>
         <div class="rules-summary">
           <h3>Quick Rules</h3>
@@ -47,6 +57,7 @@
     <!-- Game Screen -->
     <div id="game-screen" style="display:none">
       <div id="game-layout">
+        <div id="match-scoreboard"></div>
         <div id="opponents-area"></div>
         <div id="table-area">
           <div id="deck-area">

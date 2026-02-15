@@ -79,6 +79,16 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// ---- Match State ----
+const match = {
+  totalRounds: 1,
+  currentRound: 0,
+  numPlayers: 2,
+  playerNames: [],
+  matchTotals: [],
+  roundHistory: [],
+};
+
 // ---- Game State ----
 let game = null;
 let showMemoryAids = true;
@@ -130,6 +140,25 @@ function resetState() {
   state.scores = [];
   state.aiProcessing = false;
   state.turnLock = false;
+}
+
+function startMatch(numPlayers, totalRounds) {
+  match.totalRounds = totalRounds;
+  match.currentRound = 0;
+  match.numPlayers = numPlayers;
+  match.playerNames = ['You'];
+  for (let i = 1; i < numPlayers; i++) {
+    match.playerNames.push(AI_NAMES[i - 1]);
+  }
+  match.matchTotals = new Array(numPlayers).fill(0);
+  match.roundHistory = [];
+  startNextRound();
+}
+
+function startNextRound() {
+  match.currentRound++;
+  initGame(match.numPlayers);
+  render();
 }
 
 // ---- Game Logic ----
@@ -278,12 +307,22 @@ function calculateScores() {
   return state.scores;
 }
 
-function endGame() {
+function endRound() {
   state.gameOver = true;
   state.phase = 'game_over';
   calculateScores();
-  state.message = 'Game Over!';
-  addLog('Game over! Final scores calculated.');
+
+  // Accumulate into match totals
+  for (const s of state.scores) {
+    match.matchTotals[s.playerIndex] += s.score;
+  }
+  match.roundHistory.push(state.scores.map(s => ({ ...s })));
+
+  const isMultiRound = match.totalRounds > 1;
+  state.message = isMultiRound
+    ? 'Round ' + match.currentRound + ' of ' + match.totalRounds + ' complete!'
+    : 'Game Over!';
+  addLog(state.message);
   if (state.caboCallerIndex !== null) {
     const caller = state.scores.find(s => s.playerIndex === state.caboCallerIndex);
     if (caller.caboBonus === -5) {
@@ -299,14 +338,14 @@ function endGame() {
 
 function nextTurn() {
   if (checkGameEnd()) {
-    endGame();
+    endRound();
     return;
   }
 
   if (state.caboCallerIndex !== null) {
     state.turnsUntilEnd--;
     if (state.turnsUntilEnd <= 0) {
-      endGame();
+      endRound();
       return;
     }
   }
@@ -319,7 +358,7 @@ function nextTurn() {
     state.currentPlayerIndex = (state.currentPlayerIndex + 1) % state.numPlayers;
     state.turnsUntilEnd--;
     if (state.turnsUntilEnd <= 0) {
-      endGame();
+      endRound();
       return;
     }
   }
@@ -371,6 +410,7 @@ function returnToDrawDecision(msg) {
 // ---- UI Rendering ----
 function render() {
   if (state.phase === 'start') return;
+  renderScoreboard();
   renderOpponents();
   renderTable();
   renderPlayer();
@@ -725,8 +765,43 @@ function renderLog() {
   logContent.scrollTop = logContent.scrollHeight;
 }
 
+function renderScoreboard() {
+  const el = document.getElementById('match-scoreboard');
+  if (!el) return;
+  if (match.totalRounds <= 1) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'flex';
+  el.innerHTML = '';
+
+  const roundInfo = document.createElement('span');
+  roundInfo.className = 'scoreboard-round';
+  roundInfo.textContent = 'Round ' + match.currentRound + '/' + match.totalRounds;
+  el.appendChild(roundInfo);
+
+  const scoresDiv = document.createElement('span');
+  scoresDiv.className = 'scoreboard-scores';
+  for (let i = 0; i < match.numPlayers; i++) {
+    const span = document.createElement('span');
+    span.className = 'scoreboard-player';
+    span.textContent = match.playerNames[i] + ': ' + match.matchTotals[i];
+    scoresDiv.appendChild(span);
+  }
+  el.appendChild(scoresDiv);
+
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-small';
+  btn.textContent = 'New Game';
+  btn.addEventListener('click', () => {
+    const overlay = document.querySelector('.game-over-overlay');
+    if (overlay) overlay.remove();
+    showStartScreen();
+  });
+  el.appendChild(btn);
+}
+
 function renderGameOver() {
-  // Remove any existing overlay
   const existing = document.querySelector('.game-over-overlay');
   if (existing) existing.remove();
 
@@ -736,21 +811,78 @@ function renderGameOver() {
   const content = document.createElement('div');
   content.className = 'game-over-content';
 
+  const isMultiRound = match.totalRounds > 1;
+  const isMatchEnd = match.currentRound >= match.totalRounds;
+  const roundWinner = state.scores[0];
+
+  // Header
   const h2 = document.createElement('h2');
-  const winner = state.scores[0];
-  h2.textContent = winner.playerIndex === 0 ? 'You Win!' : winner.name + ' Wins!';
+  if (isMultiRound && isMatchEnd) {
+    h2.textContent = 'Match Over!';
+  } else if (isMultiRound) {
+    h2.textContent = 'Round ' + match.currentRound + ' of ' + match.totalRounds;
+  } else {
+    h2.textContent = roundWinner.playerIndex === 0 ? 'You Win!' : roundWinner.name + ' Wins!';
+  }
   content.appendChild(h2);
 
+  // Subtitle for multi-round
+  if (isMultiRound) {
+    const sub = document.createElement('div');
+    sub.className = 'round-subtitle';
+    if (isMatchEnd) {
+      let minTotal = Infinity, winnerIdx = 0;
+      for (let i = 0; i < match.numPlayers; i++) {
+        if (match.matchTotals[i] < minTotal) {
+          minTotal = match.matchTotals[i];
+          winnerIdx = i;
+        }
+      }
+      sub.textContent = (winnerIdx === 0 ? 'You' : match.playerNames[winnerIdx]) + ' win' + (winnerIdx === 0 ? '' : 's') + ' with ' + minTotal + ' points!';
+    } else {
+      sub.textContent = (roundWinner.playerIndex === 0 ? 'You' : roundWinner.name) + ' win' + (roundWinner.playerIndex === 0 ? '' : 's') + ' this round.';
+    }
+    content.appendChild(sub);
+  }
+
+  // Score table
   const table = document.createElement('table');
   table.className = 'score-table';
   const thead = document.createElement('thead');
-  thead.innerHTML = '<tr><th>Player</th><th>Score</th><th>Cards</th></tr>';
+  let headerHTML = '<tr><th>Player</th><th>' + (isMultiRound ? 'Round' : 'Score') + '</th><th>Cards</th>';
+  if (isMultiRound) headerHTML += '<th>Total</th>';
+  headerHTML += '</tr>';
+  thead.innerHTML = headerHTML;
   table.appendChild(thead);
 
   const tbody = document.createElement('tbody');
-  for (const s of state.scores) {
+
+  // Sort: match-end by total, otherwise by round score
+  let displayOrder;
+  if (isMatchEnd && isMultiRound) {
+    displayOrder = [...state.scores].sort((a, b) => match.matchTotals[a.playerIndex] - match.matchTotals[b.playerIndex]);
+  } else {
+    displayOrder = state.scores;
+  }
+
+  let matchWinnerIdx = null;
+  if (isMultiRound) {
+    let minTotal = Infinity;
+    for (let i = 0; i < match.numPlayers; i++) {
+      if (match.matchTotals[i] < minTotal) {
+        minTotal = match.matchTotals[i];
+        matchWinnerIdx = i;
+      }
+    }
+  }
+
+  for (const s of displayOrder) {
     const tr = document.createElement('tr');
-    if (s === winner) tr.className = 'winner';
+    if (isMatchEnd && isMultiRound) {
+      if (s.playerIndex === matchWinnerIdx) tr.className = 'winner';
+    } else {
+      if (s === roundWinner) tr.className = 'winner';
+    }
 
     const tdName = document.createElement('td');
     tdName.textContent = s.name;
@@ -779,15 +911,36 @@ function renderGameOver() {
     tr.appendChild(tdName);
     tr.appendChild(tdScore);
     tr.appendChild(tdCards);
+
+    if (isMultiRound) {
+      const tdTotal = document.createElement('td');
+      tdTotal.textContent = match.matchTotals[s.playerIndex];
+      tdTotal.style.fontWeight = '700';
+      tr.appendChild(tdTotal);
+    }
+
     tbody.appendChild(tr);
   }
   table.appendChild(tbody);
   content.appendChild(table);
 
-  addButton(content, 'New Game', 'btn btn-primary', () => {
+  // Buttons
+  const btnDiv = document.createElement('div');
+  btnDiv.className = 'game-over-buttons';
+
+  if (isMultiRound && !isMatchEnd) {
+    addButton(btnDiv, 'Next Round', 'btn btn-primary', () => {
+      overlay.remove();
+      startNextRound();
+    });
+  }
+
+  addButton(btnDiv, 'New Game', (isMultiRound && !isMatchEnd) ? 'btn btn-secondary' : 'btn btn-primary', () => {
     overlay.remove();
     showStartScreen();
   });
+
+  content.appendChild(btnDiv);
 
   overlay.appendChild(content);
   document.body.appendChild(overlay);
@@ -1584,6 +1737,10 @@ async function aiUsePower(pIdx, card) {
 // ---- Screen Management ----
 function showStartScreen() {
   resetState();
+  match.totalRounds = 1;
+  match.currentRound = 0;
+  match.matchTotals = [];
+  match.roundHistory = [];
   document.getElementById('start-screen').style.display = '';
   document.getElementById('game-screen').style.display = 'none';
   const existing = document.querySelector('.game-over-overlay');
@@ -1600,15 +1757,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const startBtn = document.getElementById('start-btn');
   const playerCount = document.getElementById('player-count');
   const memoryAid = document.getElementById('memory-aid');
+  const roundCount = document.getElementById('round-count');
+  const customRounds = document.getElementById('custom-rounds');
   const logToggle = document.getElementById('log-toggle');
   const logContent = document.getElementById('log-content');
+
+  roundCount.addEventListener('change', () => {
+    customRounds.style.display = roundCount.value === 'custom' ? 'inline-block' : 'none';
+  });
 
   startBtn.addEventListener('click', () => {
     const numPlayers = parseInt(playerCount.value);
     showMemoryAids = memoryAid.checked;
+    let totalRounds = 1;
+    if (roundCount.value === 'custom') {
+      totalRounds = Math.max(1, Math.min(99, parseInt(customRounds.value) || 1));
+    } else {
+      totalRounds = parseInt(roundCount.value);
+    }
     showGameScreen();
-    initGame(numPlayers);
-    render();
+    startMatch(numPlayers, totalRounds);
   });
 
   logToggle.addEventListener('click', () => {
