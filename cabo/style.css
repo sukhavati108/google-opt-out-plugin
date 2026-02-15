@@ -254,7 +254,8 @@ body {
 .opponent-cards {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 4px;
+  column-gap: 4px;
+  row-gap: 0;
 }
 
 /* ---- Table Area ---- */
@@ -315,7 +316,8 @@ body {
 #player-cards {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
+  column-gap: 6px;
+  row-gap: 0;
 }
 
 /* ---- Cards ---- */
