@@ -113,7 +113,6 @@ const state = {
   caboCallerIndex: null,
   turnsUntilEnd: null,
   selectedCards: new Set(),
-  pendingGives: [],
   powerSwapFirst: null,
   peekReveal: null, // {pIdx, cIdx} - card to temporarily show face-up
   aiHighlights: new Set(), // Set of 'pIdx-cIdx' keys to glow during AI actions
@@ -127,6 +126,8 @@ const state = {
   turnLock: false,
   blackKingOwnSelection: null,    // {pIdx, cIdx}
   blackKingOpponentSelection: null, // {pIdx, cIdx}
+  matchPreviousPhase: null,
+  matchGiveTarget: null, // {pIdx, cIdx}
 };
 
 function resetState() {
@@ -140,7 +141,6 @@ function resetState() {
   state.caboCallerIndex = null;
   state.turnsUntilEnd = null;
   state.selectedCards = new Set();
-  state.pendingGives = [];
   state.powerSwapFirst = null;
   state.peekReveal = null;
   state.message = '';
@@ -152,9 +152,10 @@ function resetState() {
   state.aiProcessing = false;
   state.turnLock = false;
   state.aiHighlights = new Set();
-  state.matchUsedThisTurn = false;
   state.blackKingOwnSelection = null;
   state.blackKingOpponentSelection = null;
+  state.matchPreviousPhase = null;
+  state.matchGiveTarget = null;
 }
 
 async function flashAiHighlight(keys, ms) {
@@ -389,13 +390,13 @@ function nextTurn() {
   state.drawnCard = null;
   state.drawnFrom = null;
   state.selectedCards.clear();
-  state.pendingGives = [];
   state.powerSwapFirst = null;
   state.peekReveal = null;
   state.turnLock = false;
-  state.matchUsedThisTurn = false;
   state.blackKingOwnSelection = null;
   state.blackKingOpponentSelection = null;
+  state.matchPreviousPhase = null;
+  state.matchGiveTarget = null;
 
   const player = state.players[state.currentPlayerIndex];
   if (player.isHuman) {
@@ -628,7 +629,7 @@ function renderOpponents() {
       let clickable = false;
       let selected = state.selectedCards.has(key);
 
-      if (state.phase === 'match_select') clickable = true;
+      if (state.phase === 'match_mode') clickable = true;
       if (state.phase === 'peek_other') clickable = true;
       if (state.phase === 'swap_cards_1' || state.phase === 'swap_cards_2') clickable = true;
       if (state.phase === 'black_king_select') clickable = true;
@@ -744,7 +745,7 @@ function renderPlayer() {
     let selected = state.selectedCards.has(key);
 
     if (state.phase === 'swap_select') clickable = true;
-    if (state.phase === 'match_select') clickable = true;
+    if (state.phase === 'match_mode') clickable = true;
     if (state.phase === 'match_give') clickable = true;
     if (state.phase === 'peek_self') clickable = true;
     if (state.phase === 'swap_cards_1' || state.phase === 'swap_cards_2') clickable = true;
@@ -783,13 +784,14 @@ function renderActions() {
     return;
   }
 
-  if (state.phase === 'turn_start') {
+  // Persistent Match button — available at any point during the human player's turn
+  if (['turn_start', 'draw_decision', 'swap_select', 'turn_end'].indexOf(state.phase) !== -1) {
     const topDiscard = getTopDiscard();
-    if (topDiscard && !state.matchUsedThisTurn) {
+    if (topDiscard) {
       addButton(area, 'Match (' + topDiscard.rank + ')', 'btn btn-secondary', () => {
-        state.phase = 'match_select';
-        state.selectedCards.clear();
-        state.message = 'Select cards that are ' + topDiscard.rank + 's (matching ' + cardName(topDiscard) + ' on discard), then Confirm.';
+        state.matchPreviousPhase = state.phase;
+        state.phase = 'match_mode';
+        state.message = 'Click any card to match against ' + cardName(topDiscard) + '. Click Done when finished.';
         render();
       });
     }
@@ -833,13 +835,21 @@ function renderActions() {
     }
   }
 
-  if (state.phase === 'match_select') {
-    addButton(area, 'Confirm Matches', 'btn btn-primary', () => {
-      resolveMatches();
-    });
-    addButton(area, 'Cancel', 'btn btn-secondary', () => {
-      state.selectedCards.clear();
-      returnToTurnStart('Your turn! Draw from the deck or discard pile.');
+  if (state.phase === 'match_mode') {
+    addButton(area, 'Done Matching', 'btn btn-primary', () => {
+      const prev = state.matchPreviousPhase || 'turn_start';
+      state.matchPreviousPhase = null;
+      state.phase = prev;
+      if (prev === 'turn_start') {
+        state.message = 'Your turn! Draw from the deck or discard pile.';
+      } else if (prev === 'draw_decision') {
+        state.message = 'You drew ' + cardName(state.drawnCard) + '. What will you do?';
+      } else if (prev === 'turn_end') {
+        state.message = 'End your turn or call Cabo.';
+      } else if (prev === 'swap_select') {
+        state.message = 'Click one of your cards to swap with ' + cardName(state.drawnCard) + '.';
+      }
+      render();
     });
   }
 
@@ -1158,14 +1168,8 @@ function onCardClick(pIdx, cIdx) {
     return;
   }
 
-  if (state.phase === 'match_select') {
-    const key = pIdx + '-' + cIdx;
-    if (state.selectedCards.has(key)) {
-      state.selectedCards.delete(key);
-    } else {
-      state.selectedCards.add(key);
-    }
-    render();
+  if (state.phase === 'match_mode') {
+    attemptMatch(pIdx, cIdx);
     return;
   }
 
@@ -1250,125 +1254,72 @@ function performSwap(pIdx, cIdx) {
   finishHumanAction('Swapped!');
 }
 
-function resolveMatches() {
-  if (state.selectedCards.size === 0) {
-    state.message = 'No cards selected. Select matching cards or Cancel.';
-    render();
-    return;
-  }
+function attemptMatch(pIdx, cIdx) {
+  const card = state.players[pIdx].cards[cIdx];
+  if (!card) return;
 
   const topDiscard = getTopDiscard();
-  const matchRank = topDiscard.rank;
-  const results = [];
-  const correctOwn = [];
-  const correctOther = [];
-  const wrong = [];
+  if (!topDiscard) return;
 
-  for (const key of state.selectedCards) {
-    const [pStr, cStr] = key.split('-');
-    const pIdx = parseInt(pStr);
-    const cIdx = parseInt(cStr);
-    const card = state.players[pIdx].cards[cIdx];
-    if (!card) continue;
-
-    if (card.rank === matchRank) {
-      results.push({ pIdx, cIdx, card, correct: true });
-      if (pIdx === 0) correctOwn.push({ pIdx, cIdx, card });
-      else correctOther.push({ pIdx, cIdx, card });
+  if (card.rank === topDiscard.rank) {
+    // Correct match
+    if (pIdx === 0) {
+      // Own card: discard it and remove from hand
+      discardCard(card);
+      state.players[0].cards[cIdx] = null;
+      clearMemoryAt(0, cIdx);
+      addLog('Matched your ' + cardName(card) + '! Card discarded.');
+      state.message = 'Correct! ' + cardName(card) + ' removed. Continue matching or click Done.';
+      render();
     } else {
-      results.push({ pIdx, cIdx, card, correct: false });
-      wrong.push({ pIdx, cIdx, card });
+      // Opponent card: discard it, then give them one of yours
+      discardCard(card);
+      state.players[pIdx].cards[cIdx] = null;
+      clearMemoryAt(pIdx, cIdx);
+      addLog('Matched ' + state.players[pIdx].name + "'s " + cardName(card) + '!');
+
+      const ownCards = nonNullCardIndices(0);
+      if (ownCards.length > 0) {
+        state.matchGiveTarget = { pIdx, cIdx };
+        state.phase = 'match_give';
+        state.message = 'Choose one of your cards to give to ' + state.players[pIdx].name + ' as a replacement.';
+      } else {
+        state.message = 'Correct! ' + state.players[pIdx].name + "'s card removed. Continue matching or click Done.";
+      }
+      render();
     }
-  }
-
-  // Process correct own matches: remove cards
-  for (const m of correctOwn) {
-    state.players[m.pIdx].cards[m.cIdx] = null;
-    clearMemoryAt(m.pIdx, m.cIdx);
-    addLog('Matched your ' + cardName(m.card) + '! Card removed.');
-  }
-
-  // Process wrong matches: penalty cards
-  for (const m of wrong) {
-    addLog('Wrong! ' + cardName(m.card) + ' is not a ' + matchRank + '. Penalty card!');
+  } else {
+    // Wrong match — penalty card
+    addLog('Wrong! ' + cardName(card) + ' is not a ' + topDiscard.rank + '. Penalty card!');
     const penalty = drawFromDeck();
     if (penalty) {
-      // Add penalty card to human player's hand
       state.players[0].cards.push(penalty);
-      // Don't let the player see it
     }
+    state.message = 'Wrong match! Penalty card added. Continue matching or click Done.';
+    render();
   }
-
-  state.matchUsedThisTurn = true;
-
-  // Process correct other matches: need to give cards
-  if (correctOther.length > 0) {
-    // Remove matched opponent cards, queue gives
-    for (const m of correctOther) {
-      state.players[m.pIdx].cards[m.cIdx] = null;
-      clearMemoryAt(m.pIdx, m.cIdx);
-      addLog('Matched ' + state.players[m.pIdx].name + "'s " + cardName(m.card) + '!');
-      state.pendingGives.push({ pIdx: m.pIdx, cIdx: m.cIdx });
-    }
-
-    // Start giving cards
-    processNextGive();
-    return;
-  }
-
-  // No opponent matches, return to turn_start to draw
-  let msg = 'Matching done. ';
-  msg += correctOwn.length + ' matched';
-  if (wrong.length > 0) msg += ', ' + wrong.length + ' penalty card(s)';
-  msg += '. Now draw from the deck or discard pile.';
-
-  state.selectedCards.clear();
-  returnToTurnStart(msg);
-}
-
-function processNextGive() {
-  if (state.pendingGives.length === 0) {
-    state.selectedCards.clear();
-    if (state.drawnCard) {
-      returnToDrawDecision('All matches resolved! Now swap, discard, or use your drawn card.');
-    } else {
-      returnToTurnStart('All matches resolved! Now draw from the deck or discard pile.');
-    }
-    return;
-  }
-
-  const give = state.pendingGives[0];
-  const ownCards = nonNullCardIndices(0);
-  if (ownCards.length === 0) {
-    // No cards to give, skip
-    state.pendingGives.shift();
-    processNextGive();
-    return;
-  }
-
-  state.phase = 'match_give';
-  state.message = 'Choose one of your cards to give to ' + state.players[give.pIdx].name + '.';
-  render();
 }
 
 function performGiveCard(cIdx) {
-  if (state.pendingGives.length === 0) return;
   const card = state.players[0].cards[cIdx];
   if (!card) return;
+  if (!state.matchGiveTarget) return;
 
-  const give = state.pendingGives.shift();
+  const target = state.matchGiveTarget;
 
   // Move card from human to opponent's empty slot
-  state.players[give.pIdx].cards[give.cIdx] = card;
+  state.players[target.pIdx].cards[target.cIdx] = card;
   state.players[0].cards[cIdx] = null;
 
   // Nobody sees the replacement
-  clearMemoryAt(give.pIdx, give.cIdx);
+  clearMemoryAt(target.pIdx, target.cIdx);
   clearMemoryAt(0, cIdx);
 
-  addLog('You gave a card to ' + state.players[give.pIdx].name + '.');
-
-  processNextGive();
+  addLog('You gave a card to ' + state.players[target.pIdx].name + '.');
+  state.matchGiveTarget = null;
+  state.phase = 'match_mode';
+  state.message = 'Card given. Continue matching or click Done.';
+  render();
 }
 
 function usePowerCard() {
@@ -1637,6 +1588,18 @@ async function runAiTurn(pIdx) {
     state.drawnCard = null;
   }
 
+  // Post-action matching: top discard may have changed
+  const postDiscard = getTopDiscard();
+  if (postDiscard) {
+    const postMatchTargets = findAiMatchTargets(pIdx, postDiscard);
+    if (postMatchTargets.length > 0) {
+      render();
+      await delay(1000);
+      await aiPerformMatch(pIdx, postDiscard, postMatchTargets);
+      await delay(1000);
+    }
+  }
+
   // After action: check if AI wants to call Cabo
   render();
   await delay(2000);
@@ -1771,11 +1734,13 @@ async function aiPerformMatch(pIdx, drawnCard, targets) {
       await flashAiHighlight(t.pIdx + '-' + t.cIdx, 2000);
 
       if (t.pIdx === pIdx) {
-        // Own card: just remove it
+        // Own card: discard and remove it
+        discardCard(card);
         state.players[t.pIdx].cards[t.cIdx] = null;
         clearMemoryAt(t.pIdx, t.cIdx);
       } else {
-        // Opponent's card: remove and give a replacement
+        // Opponent's card: discard and give a replacement
+        discardCard(card);
         state.players[t.pIdx].cards[t.cIdx] = null;
         clearMemoryAt(t.pIdx, t.cIdx);
 
