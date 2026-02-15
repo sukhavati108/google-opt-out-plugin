@@ -255,7 +255,7 @@ body {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   column-gap: 4px;
-  row-gap: 0;
+  row-gap: 20px;
 }
 
 /* ---- Table Area ---- */
@@ -317,7 +317,7 @@ body {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   column-gap: 6px;
-  row-gap: 0;
+  row-gap: 20px;
 }
 
 /* ---- Cards ---- */
@@ -438,7 +438,6 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 125px;
 }
 
 /* ---- Message Area ---- */
