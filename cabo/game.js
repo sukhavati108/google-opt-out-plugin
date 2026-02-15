@@ -255,8 +255,25 @@ function calculateScores() {
         cards.push(card);
       }
     }
-    return { playerIndex: i, name: p.name, score: total, cards };
+    return { playerIndex: i, name: p.name, score: total, caboBonus: 0, cards };
   });
+
+  // Apply CABO caller bonus/penalty
+  if (state.caboCallerIndex !== null) {
+    const caller = state.scores.find(s => s.playerIndex === state.caboCallerIndex);
+    const lowestOpponent = Math.min(
+      ...state.scores.filter(s => s.playerIndex !== state.caboCallerIndex).map(s => s.score)
+    );
+    if (caller.score < lowestOpponent) {
+      caller.caboBonus = -5;
+      caller.score -= 5;
+    } else if (caller.score > lowestOpponent) {
+      caller.caboBonus = 5;
+      caller.score += 5;
+    }
+    // Tied with lowest: no adjustment
+  }
+
   state.scores.sort((a, b) => a.score - b.score);
   return state.scores;
 }
@@ -267,6 +284,16 @@ function endGame() {
   calculateScores();
   state.message = 'Game Over!';
   addLog('Game over! Final scores calculated.');
+  if (state.caboCallerIndex !== null) {
+    const caller = state.scores.find(s => s.playerIndex === state.caboCallerIndex);
+    if (caller.caboBonus === -5) {
+      addLog(caller.name + ' called Cabo with the lowest score! -5 bonus.');
+    } else if (caller.caboBonus === 5) {
+      addLog(caller.name + ' was back-doored! +5 penalty.');
+    } else {
+      addLog(caller.name + ' called Cabo but tied — no bonus.');
+    }
+  }
   render();
 }
 
@@ -730,7 +757,12 @@ function renderGameOver() {
     if (state.caboCallerIndex === s.playerIndex) tdName.textContent += ' (Cabo)';
 
     const tdScore = document.createElement('td');
-    tdScore.textContent = s.score;
+    if (s.caboBonus !== 0) {
+      const bonusStr = s.caboBonus > 0 ? ' (+5)' : ' (-5)';
+      tdScore.textContent = s.score + bonusStr;
+    } else {
+      tdScore.textContent = s.score;
+    }
 
     const tdCards = document.createElement('td');
     const cardsDiv = document.createElement('div');
