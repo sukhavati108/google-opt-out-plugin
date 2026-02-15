@@ -425,24 +425,20 @@ body {
 }
 
 .card-memory {
-  position: absolute;
-  bottom: -18px;
-  left: 50%;
-  transform: translateX(-50%);
   font-size: 0.65rem;
   color: #8bb8e8;
   white-space: nowrap;
   background: rgba(0,0,0,0.4);
   padding: 1px 5px;
   border-radius: 3px;
+  margin-top: 2px;
 }
 
 .card-slot {
   display: flex;
   flex-direction: column;
   align-items: center;
-  position: relative;
-  padding-bottom: 20px;
+  min-height: 125px;
 }
 
 /* ---- Message Area ---- */
