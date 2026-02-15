@@ -1016,9 +1016,29 @@ body {
 
 /* ---- How to Play / Rules Overlay ---- */
 #how-to-play-btn {
-  margin-top: 10px;
-  display: block;
-  width: 100%;
+  margin-top: 14px;
+  display: inline-block;
+  padding: 8px 22px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f1c40f;
+  background: transparent;
+  border: 1.5px solid rgba(241, 196, 15, 0.5);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.03em;
+}
+
+#how-to-play-btn:hover {
+  background: rgba(241, 196, 15, 0.12);
+  border-color: #f1c40f;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(241, 196, 15, 0.15);
+}
+
+#how-to-play-btn:active {
+  transform: translateY(0);
 }
 
 .rules-overlay {
