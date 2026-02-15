@@ -2461,10 +2461,11 @@ function showRulesOverlay() {
 
   // --- Matching ---
   addSection('Matching',
-    'At <strong>any point during your turn</strong>, if you believe one of the face-down cards on the table matches the rank of the <strong>top discard</strong>, you can attempt a match:<br><br>' +
-    '\u2022 <strong>Match your own card</strong> — If correct, the card is removed from your hand (fewer cards = lower score!)<br>' +
-    '\u2022 <strong>Match an opponent\u2019s card</strong> — If correct, their card is discarded and you give them one of yours<br>' +
-    '\u2022 <strong>Wrong guess</strong> — You draw a <strong>penalty card</strong> from the deck as punishment'
+    'Whenever a card is discarded by <strong>any player</strong>, any player can attempt to match against it — <strong>even if it\u2019s not your turn</strong>. If you believe one of the face-down cards on the table matches the rank of the <strong>top discard</strong>, select it to attempt a match.<br><br>' +
+    '\u2022 <strong>Match your own card</strong> — If correct, the card is removed from your hand entirely (fewer cards = lower score!)<br>' +
+    '\u2022 <strong>Match an opponent\u2019s card</strong> — If correct, their card is discarded and you give them one of yours (you choose which)<br>' +
+    '\u2022 <strong>Wrong guess</strong> — You draw a <strong>penalty card</strong> from the deck. This is an <strong>extra card added to your hand</strong> that you <strong>cannot look at</strong> — a double punishment: not only did you fail to match, but now you have more cards than you started with, increasing both your card count and total score.<br><br>' +
+    '<em>In a physical game this is a race — fastest player wins. In this digital version, you\u2019ll be given a matching opportunity after every discard.</em>'
   );
 
   // --- Calling Cabo ---
