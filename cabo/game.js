@@ -7,7 +7,7 @@ const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' };
 const RED_SUITS = new Set(['hearts', 'diamonds']);
-const AI_NAMES = ['Coco', 'Bob', 'Carol'];
+const AI_NAMES = ['Coco', 'Tashi', 'Ricky Baker', 'Jeff'];
 
 // ---- Utility Functions ----
 function createCard(rank, suit) {
