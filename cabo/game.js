@@ -50,9 +50,15 @@ function isOneEyedKing(card) {
   return card && card.rank === 'K' && card.suit === 'diamonds';
 }
 
+function isBlackKing(card) {
+  return card && card.rank === 'K' && (card.suit === 'spades' || card.suit === 'clubs');
+}
+
 function isPowerCard(card) {
   if (!card) return false;
-  return ['7','8','9','10','J','Q'].indexOf(card.rank) !== -1;
+  if (['7','8','9','10','J','Q'].indexOf(card.rank) !== -1) return true;
+  if (isBlackKing(card)) return true;
+  return false;
 }
 
 function getPowerType(card) {
@@ -60,6 +66,7 @@ function getPowerType(card) {
   if (card.rank === '7' || card.rank === '8') return 'peek_self';
   if (card.rank === '9' || card.rank === '10') return 'peek_other';
   if (card.rank === 'J' || card.rank === 'Q') return 'swap_cards';
+  if (isBlackKing(card)) return 'spy_and_swap';
   return null;
 }
 
@@ -68,6 +75,7 @@ function getPowerDescription(card) {
   if (type === 'peek_self') return 'Peek at one of your own cards';
   if (type === 'peek_other') return "Peek at an opponent's card";
   if (type === 'swap_cards') return 'Swap any two cards on the table';
+  if (type === 'spy_and_swap') return 'Spy & Swap: peek at one, then swap or keep';
   return '';
 }
 
@@ -117,6 +125,8 @@ const state = {
   scores: [],
   aiProcessing: false,
   turnLock: false,
+  blackKingOwnSelection: null,    // {pIdx, cIdx}
+  blackKingOpponentSelection: null, // {pIdx, cIdx}
 };
 
 function resetState() {
@@ -143,6 +153,8 @@ function resetState() {
   state.turnLock = false;
   state.aiHighlights = new Set();
   state.matchUsedThisTurn = false;
+  state.blackKingOwnSelection = null;
+  state.blackKingOpponentSelection = null;
 }
 
 async function flashAiHighlight(keys, ms) {
@@ -382,6 +394,8 @@ function nextTurn() {
   state.peekReveal = null;
   state.turnLock = false;
   state.matchUsedThisTurn = false;
+  state.blackKingOwnSelection = null;
+  state.blackKingOpponentSelection = null;
 
   const player = state.players[state.currentPlayerIndex];
   if (player.isHuman) {
@@ -617,6 +631,12 @@ function renderOpponents() {
       if (state.phase === 'match_select') clickable = true;
       if (state.phase === 'peek_other') clickable = true;
       if (state.phase === 'swap_cards_1' || state.phase === 'swap_cards_2') clickable = true;
+      if (state.phase === 'black_king_select') clickable = true;
+
+      if (state.phase === 'black_king_select' && state.blackKingOpponentSelection &&
+          state.blackKingOpponentSelection.pIdx === p && state.blackKingOpponentSelection.cIdx === c) {
+        selected = true;
+      }
 
       let highlight = isPeekRevealed ? 'peek' : null;
       if (!highlight && state.aiHighlights.has(key)) highlight = 'ai';
@@ -728,6 +748,12 @@ function renderPlayer() {
     if (state.phase === 'match_give') clickable = true;
     if (state.phase === 'peek_self') clickable = true;
     if (state.phase === 'swap_cards_1' || state.phase === 'swap_cards_2') clickable = true;
+    if (state.phase === 'black_king_select') clickable = true;
+
+    if (state.phase === 'black_king_select' && state.blackKingOwnSelection &&
+        state.blackKingOwnSelection.cIdx === c) {
+      selected = true;
+    }
 
     let highlight = isPeekRevealed ? 'peek' : null;
     if (!highlight && state.aiHighlights.has(key)) highlight = 'ai';
@@ -839,6 +865,48 @@ function renderActions() {
       state.powerSwapFirst = null;
       state.message = 'Choose the first card to swap.';
       render();
+    });
+  }
+
+  if (state.phase === 'black_king_select') {
+    const bothSelected = state.blackKingOwnSelection !== null && state.blackKingOpponentSelection !== null;
+    if (bothSelected) {
+      addButton(area, 'Confirm Selection', 'btn btn-primary', () => {
+        state.phase = 'black_king_peek_choice';
+        state.message = 'Which card do you want to peek at?';
+        render();
+      });
+    }
+    addButton(area, 'Skip (waste power)', 'btn btn-secondary', () => {
+      state.blackKingOwnSelection = null;
+      state.blackKingOpponentSelection = null;
+      addLog('You skipped the Black King power.');
+      finishHumanAction('Power skipped.');
+    });
+  }
+
+  if (state.phase === 'black_king_peek_choice') {
+    const oppSel = state.blackKingOpponentSelection;
+    const oppName = state.players[oppSel.pIdx].name;
+    addButton(area, 'Peek at your card', 'btn btn-primary', () => {
+      performBlackKingPeek('own');
+    });
+    addButton(area, "Peek at " + oppName + "'s card", 'btn btn-primary', () => {
+      performBlackKingPeek('opponent');
+    });
+    addButton(area, 'Go back', 'btn btn-secondary', () => {
+      state.phase = 'black_king_select';
+      state.message = "Reselect your cards, or confirm to proceed.";
+      render();
+    });
+  }
+
+  if (state.phase === 'black_king_swap_decision') {
+    addButton(area, 'Swap the two cards', 'btn btn-primary', () => {
+      performBlackKingSwap(true);
+    });
+    addButton(area, 'Keep as they are', 'btn btn-secondary', () => {
+      performBlackKingSwap(false);
     });
   }
 }
@@ -1119,6 +1187,39 @@ function onCardClick(pIdx, cIdx) {
     return;
   }
 
+  if (state.phase === 'black_king_select') {
+    if (pIdx === 0) {
+      // Selecting own card
+      if (state.blackKingOwnSelection && state.blackKingOwnSelection.cIdx === cIdx) {
+        state.blackKingOwnSelection = null; // deselect
+      } else {
+        state.blackKingOwnSelection = { pIdx: 0, cIdx };
+      }
+    } else {
+      // Selecting opponent card
+      if (state.blackKingOpponentSelection &&
+          state.blackKingOpponentSelection.pIdx === pIdx && state.blackKingOpponentSelection.cIdx === cIdx) {
+        state.blackKingOpponentSelection = null; // deselect
+      } else {
+        state.blackKingOpponentSelection = { pIdx, cIdx };
+      }
+    }
+    // Update message
+    const ownSelected = state.blackKingOwnSelection !== null;
+    const oppSelected = state.blackKingOpponentSelection !== null;
+    if (ownSelected && oppSelected) {
+      state.message = 'Both cards selected. Click Confirm to proceed.';
+    } else if (ownSelected) {
+      state.message = "Now select one of an opponent's cards.";
+    } else if (oppSelected) {
+      state.message = 'Now select one of your own cards.';
+    } else {
+      state.message = "Select one of your cards AND one of an opponent's cards.";
+    }
+    render();
+    return;
+  }
+
   if (state.phase === 'swap_cards_1') {
     state.powerSwapFirst = { pIdx, cIdx };
     state.phase = 'swap_cards_2';
@@ -1287,6 +1388,11 @@ function usePowerCard() {
   } else if (powerType === 'swap_cards') {
     state.phase = 'swap_cards_1';
     state.message = 'Choose the first card to swap (any card on the table).';
+  } else if (powerType === 'spy_and_swap') {
+    state.blackKingOwnSelection = null;
+    state.blackKingOpponentSelection = null;
+    state.phase = 'black_king_select';
+    state.message = "Select one of your cards AND one of an opponent's cards.";
   }
   render();
 }
@@ -1360,6 +1466,81 @@ function performPowerSwap(p1, c1, p2, c2) {
   addLog('You swapped ' + name1 + ' card with ' + name2 + ' card.');
   state.powerSwapFirst = null;
   finishHumanAction('Cards swapped!');
+}
+
+// ---- Black King Power (Human) ----
+function performBlackKingPeek(which) {
+  let peekTarget;
+  if (which === 'own') {
+    peekTarget = state.blackKingOwnSelection;
+  } else {
+    peekTarget = state.blackKingOpponentSelection;
+  }
+
+  const card = state.players[peekTarget.pIdx].cards[peekTarget.cIdx];
+  if (!card) {
+    state.message = 'That card slot is empty. Power wasted.';
+    finishHumanAction('Card was empty.');
+    return;
+  }
+
+  setMemory(0, peekTarget.pIdx, peekTarget.cIdx, card);
+  const ownerName = peekTarget.pIdx === 0 ? 'Your' : state.players[peekTarget.pIdx].name + "'s";
+  addLog('You peeked at ' + ownerName.toLowerCase() + ' card: ' + cardName(card) + '.');
+  state.message = ownerName + ' card is ' + cardName(card) + '. Now decide: swap or keep?';
+  state.peekReveal = { pIdx: peekTarget.pIdx, cIdx: peekTarget.cIdx };
+  state.phase = 'black_king_peek_show';
+  render();
+
+  setTimeout(() => {
+    state.peekReveal = null;
+    state.phase = 'black_king_swap_decision';
+    state.message = 'Swap your card with ' + state.players[state.blackKingOpponentSelection.pIdx].name + "'s card, or keep them?";
+    render();
+  }, 2500);
+}
+
+function performBlackKingSwap(doSwap) {
+  const own = state.blackKingOwnSelection;
+  const opp = state.blackKingOpponentSelection;
+
+  if (doSwap) {
+    const card1 = state.players[own.pIdx].cards[own.cIdx];
+    const card2 = state.players[opp.pIdx].cards[opp.cIdx];
+
+    state.players[own.pIdx].cards[own.cIdx] = card2;
+    state.players[opp.pIdx].cards[opp.cIdx] = card1;
+
+    // Update memories
+    const key1 = own.pIdx + '-' + own.cIdx;
+    const key2 = opp.pIdx + '-' + opp.cIdx;
+
+    const hm1 = state.humanMemory.get(key1);
+    const hm2 = state.humanMemory.get(key2);
+    state.humanMemory.delete(key1);
+    state.humanMemory.delete(key2);
+    if (hm1) state.humanMemory.set(key2, hm1);
+    if (hm2) state.humanMemory.set(key1, hm2);
+
+    for (let ai = 0; ai < state.numPlayers; ai++) {
+      const m1 = state.aiMemory[ai].get(key1);
+      const m2 = state.aiMemory[ai].get(key2);
+      state.aiMemory[ai].delete(key1);
+      state.aiMemory[ai].delete(key2);
+      if (m1) state.aiMemory[ai].set(key2, m1);
+      if (m2) state.aiMemory[ai].set(key1, m2);
+    }
+
+    addLog('You swapped your card with ' + state.players[opp.pIdx].name + "'s card.");
+    state.blackKingOwnSelection = null;
+    state.blackKingOpponentSelection = null;
+    finishHumanAction('Cards swapped!');
+  } else {
+    addLog('You chose to keep the cards in place.');
+    state.blackKingOwnSelection = null;
+    state.blackKingOpponentSelection = null;
+    finishHumanAction('Cards kept.');
+  }
 }
 
 // ---- AI Logic ----
@@ -1699,6 +1880,11 @@ function decideAiAction(pIdx, drawnCard, fromDeck) {
       // Use if we know an opponent has a low card we want
       if (Math.random() < 0.4) return { type: 'power' };
     }
+    if (powerType === 'spy_and_swap') {
+      // Use the spy & swap if we have unknown cards or known high cards
+      if (unknownIndices.length > 0 || worstVal >= 7) return { type: 'power' };
+      if (Math.random() < 0.3) return { type: 'power' };
+    }
   }
 
   // High value (7+): discard unless we have known worse
@@ -1854,7 +2040,137 @@ async function aiUsePower(pIdx, card) {
     }
   }
 
+  if (powerType === 'spy_and_swap') {
+    await aiUseBlackKingPower(pIdx);
+  }
+
   render();
+}
+
+async function aiUseBlackKingPower(pIdx) {
+  const player = state.players[pIdx];
+  const mem = state.aiMemory[pIdx];
+
+  // Step 1: Select one own card and one opponent card
+  // Prefer: own card = unknown or known high; opponent card = unknown or known low
+  const ownCards = nonNullCardIndices(pIdx);
+  const oppCards = [];
+  for (let p = 0; p < state.numPlayers; p++) {
+    if (p === pIdx) continue;
+    for (let c = 0; c < state.players[p].cards.length; c++) {
+      if (state.players[p].cards[c]) oppCards.push({ p, c });
+    }
+  }
+  if (ownCards.length === 0 || oppCards.length === 0) return;
+
+  // Pick own card: prefer unknown, then highest known
+  let ownIdx;
+  const ownUnknowns = ownCards.filter(c => !mem.has(pIdx + '-' + c));
+  if (ownUnknowns.length > 0) {
+    ownIdx = ownUnknowns[Math.floor(Math.random() * ownUnknowns.length)];
+  } else {
+    // Pick the highest valued known card
+    let bestIdx = ownCards[0];
+    let bestVal = -1;
+    for (const ci of ownCards) {
+      const known = mem.get(pIdx + '-' + ci);
+      const val = known ? getCardValue(known) : 0;
+      if (val > bestVal) { bestVal = val; bestIdx = ci; }
+    }
+    ownIdx = bestIdx;
+  }
+
+  // Pick opponent card: prefer unknown, then lowest known
+  let oppTarget;
+  const oppUnknowns = oppCards.filter(t => !mem.has(t.p + '-' + t.c));
+  if (oppUnknowns.length > 0) {
+    oppTarget = oppUnknowns[Math.floor(Math.random() * oppUnknowns.length)];
+  } else {
+    let bestTarget = oppCards[0];
+    let bestVal = Infinity;
+    for (const t of oppCards) {
+      const known = mem.get(t.p + '-' + t.c);
+      const val = known ? getCardValue(known) : 7;
+      if (val < bestVal) { bestVal = val; bestTarget = t; }
+    }
+    oppTarget = bestTarget;
+  }
+
+  const ownKey = pIdx + '-' + ownIdx;
+  const oppKey = oppTarget.p + '-' + oppTarget.c;
+  const oppPlayerName = oppTarget.p === 0 ? 'your' : state.players[oppTarget.p].name + "'s";
+
+  addLog(player.name + ' selected a card and ' + oppPlayerName + ' card for Spy & Swap.');
+  state.message = player.name + ' is using Spy & Swap...';
+  await flashAiHighlight([ownKey, oppKey], 2000);
+
+  // Step 2: Decide which card to peek at
+  // Peek at the unknown one; if both known or both unknown, peek at opponent's
+  const ownKnown = mem.has(ownKey);
+  const oppKnown = mem.has(oppKey);
+  let peekOwn;
+  if (!ownKnown && oppKnown) {
+    peekOwn = true;
+  } else if (ownKnown && !oppKnown) {
+    peekOwn = false;
+  } else {
+    // Both unknown or both known - peek at opponent's card to gain info
+    peekOwn = false;
+  }
+
+  const peekTarget = peekOwn ? { p: pIdx, c: ownIdx } : { p: oppTarget.p, c: oppTarget.c };
+  const peekedCard = state.players[peekTarget.p].cards[peekTarget.c];
+  if (peekedCard) {
+    setMemory(pIdx, peekTarget.p, peekTarget.c, peekedCard);
+  }
+
+  const peekName = peekTarget.p === pIdx ? 'their own' :
+    (peekTarget.p === 0 ? 'your' : state.players[peekTarget.p].name + "'s");
+  addLog(player.name + ' peeked at ' + peekName + ' card.');
+  state.message = player.name + ' peeked at ' + peekName + ' card.';
+  await flashAiHighlight(peekTarget.p + '-' + peekTarget.c, 2000);
+
+  // Step 3: Decide whether to swap
+  // Get the values (now known after peek)
+  const ownCardObj = state.players[pIdx].cards[ownIdx];
+  const oppCardObj = state.players[oppTarget.p].cards[oppTarget.c];
+  const ownMem = mem.get(ownKey);
+  const oppMem = mem.get(oppKey);
+  const ownVal = ownMem ? getCardValue(ownMem) : (ownCardObj ? getCardValue(ownCardObj) : 7);
+  const oppVal = oppMem ? getCardValue(oppMem) : (oppCardObj ? getCardValue(oppCardObj) : 7);
+
+  // Swap if opponent's card is lower (better for AI) and the difference is meaningful
+  const shouldSwap = oppVal < ownVal - 1;
+
+  if (shouldSwap && ownCardObj && oppCardObj) {
+    state.players[pIdx].cards[ownIdx] = oppCardObj;
+    state.players[oppTarget.p].cards[oppTarget.c] = ownCardObj;
+
+    // Update all memories
+    for (let ai = 0; ai < state.numPlayers; ai++) {
+      const m1 = state.aiMemory[ai].get(ownKey);
+      const m2 = state.aiMemory[ai].get(oppKey);
+      state.aiMemory[ai].delete(ownKey);
+      state.aiMemory[ai].delete(oppKey);
+      if (m1) state.aiMemory[ai].set(oppKey, m1);
+      if (m2) state.aiMemory[ai].set(ownKey, m2);
+    }
+    const hm1 = state.humanMemory.get(ownKey);
+    const hm2 = state.humanMemory.get(oppKey);
+    state.humanMemory.delete(ownKey);
+    state.humanMemory.delete(oppKey);
+    if (hm1) state.humanMemory.set(oppKey, hm1);
+    if (hm2) state.humanMemory.set(ownKey, hm2);
+
+    addLog(player.name + ' swapped their card with ' + oppPlayerName + ' card!');
+    state.message = player.name + ' swapped their card with ' + oppPlayerName + ' card!';
+    await flashAiHighlight([ownKey, oppKey], 2500);
+  } else {
+    addLog(player.name + ' chose not to swap.');
+    state.message = player.name + ' chose not to swap.';
+    render();
+    await delay(2000);
+  }
 }
 
 // ---- Screen Management ----
