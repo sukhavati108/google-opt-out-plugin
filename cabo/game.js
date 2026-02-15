@@ -322,6 +322,19 @@ function nextTurn() {
   }
 }
 
+function finishHumanAction(msg) {
+  if (state.caboCallerIndex !== null) {
+    // Cabo already called, just proceed to next turn
+    state.message = msg || 'Done.';
+    render();
+    setTimeout(() => nextTurn(), 600);
+    return;
+  }
+  state.phase = 'turn_end';
+  state.message = msg ? msg + ' End your turn or call Cabo.' : 'End your turn or call Cabo.';
+  render();
+}
+
 // ---- UI Rendering ----
 function render() {
   if (state.phase === 'start') return;
@@ -577,15 +590,20 @@ function renderActions() {
     return;
   }
 
-  if (state.phase === 'turn_start' && state.caboCallerIndex === null) {
-    addButton(area, 'Call Cabo!', 'btn btn-cabo', () => {
-      state.caboCallerIndex = 0;
-      state.turnsUntilEnd = state.numPlayers; // everyone else gets one turn
-      state.message = 'You called CABO! Everyone else gets one more turn.';
-      addLog('You called CABO!');
-      render();
-      setTimeout(() => nextTurn(), 1500);
+  if (state.phase === 'turn_end') {
+    addButton(area, 'End Turn', 'btn btn-primary', () => {
+      nextTurn();
     });
+    if (state.caboCallerIndex === null) {
+      addButton(area, 'Call Cabo!', 'btn btn-cabo', () => {
+        state.caboCallerIndex = 0;
+        state.turnsUntilEnd = state.numPlayers;
+        state.message = 'You called CABO! Everyone else gets one more turn.';
+        addLog('You called CABO!');
+        render();
+        setTimeout(() => nextTurn(), 1500);
+      });
+    }
   }
 
   if (state.phase === 'draw_decision') {
@@ -606,8 +624,7 @@ function renderActions() {
       addLog('You discarded ' + cardName(state.drawnCard) + '.');
       discardCard(state.drawnCard);
       state.drawnCard = null;
-      render();
-      setTimeout(() => nextTurn(), 500);
+      finishHumanAction('Discarded.');
     });
 
     if (state.drawnFrom === 'deck' && isPowerCard(state.drawnCard)) {
@@ -642,9 +659,7 @@ function renderActions() {
     addButton(area, 'Skip (waste power)', 'btn btn-secondary', () => {
       state.powerSwapFirst = null;
       addLog('You skipped the swap power.');
-      state.message = 'Power skipped.';
-      render();
-      setTimeout(() => nextTurn(), 500);
+      finishHumanAction('Power skipped.');
     });
   }
 
@@ -843,8 +858,7 @@ function performSwap(pIdx, cIdx) {
   addLog('You swapped ' + cardName(state.drawnCard) + ' into your hand, discarding ' + cardName(oldCard) + '.');
 
   state.drawnCard = null;
-  render();
-  setTimeout(() => nextTurn(), 600);
+  finishHumanAction('Swapped!');
 }
 
 function resolveMatches() {
@@ -921,19 +935,16 @@ function resolveMatches() {
   let msg = 'Matching done. ';
   msg += correctOwn.length + ' matched';
   if (wrong.length > 0) msg += ', ' + wrong.length + ' penalty card(s)';
-  state.message = msg + '.';
+  msg += '.';
 
   state.selectedCards.clear();
-  render();
-  setTimeout(() => nextTurn(), 1200);
+  finishHumanAction(msg);
 }
 
 function processNextGive() {
   if (state.pendingGives.length === 0) {
-    state.message = 'All matches resolved!';
     state.selectedCards.clear();
-    render();
-    setTimeout(() => nextTurn(), 1000);
+    finishHumanAction('All matches resolved!');
     return;
   }
 
@@ -1005,9 +1016,7 @@ function performPeekSelf(cIdx) {
 
   setTimeout(() => {
     state.peekReveal = null;
-    state.message = 'Card memorized. Moving on...';
-    render();
-    setTimeout(() => nextTurn(), 500);
+    finishHumanAction('Card memorized.');
   }, 2500);
 }
 
@@ -1024,9 +1033,7 @@ function performPeekOther(pIdx, cIdx) {
 
   setTimeout(() => {
     state.peekReveal = null;
-    state.message = 'Card memorized. Moving on...';
-    render();
-    setTimeout(() => nextTurn(), 500);
+    finishHumanAction('Card memorized.');
   }, 2500);
 }
 
@@ -1063,11 +1070,8 @@ function performPowerSwap(p1, c1, p2, c2) {
   const name1 = p1 === 0 ? 'your' : state.players[p1].name + "'s";
   const name2 = p2 === 0 ? 'your' : state.players[p2].name + "'s";
   addLog('You swapped ' + name1 + ' card with ' + name2 + ' card.');
-  state.message = 'Cards swapped!';
   state.powerSwapFirst = null;
-
-  render();
-  setTimeout(() => nextTurn(), 800);
+  finishHumanAction('Cards swapped!');
 }
 
 // ---- AI Logic ----
@@ -1078,19 +1082,6 @@ async function runAiTurn(pIdx) {
   state.message = player.name + ' is thinking...';
   render();
   await delay(800);
-
-  // Check if AI wants to call Cabo
-  if (state.caboCallerIndex === null && shouldAiCallCabo(pIdx)) {
-    state.caboCallerIndex = pIdx;
-    state.turnsUntilEnd = state.numPlayers;
-    state.message = player.name + ' called CABO!';
-    addLog(player.name + ' called CABO!');
-    render();
-    await delay(1500);
-    state.aiProcessing = false;
-    nextTurn();
-    return;
-  }
 
   // Decide draw source
   const topDiscard = getTopDiscard();
@@ -1130,60 +1121,58 @@ async function runAiTurn(pIdx) {
       addLog(player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.');
       state.message = player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.';
     } else {
-      // Fallback: discard it back (shouldn't happen with proper AI)
       discardCard(drawnCard);
       addLog(player.name + ' discarded ' + cardName(drawnCard) + '.');
       state.message = player.name + ' discarded ' + cardName(drawnCard) + '.';
     }
-
     state.drawnCard = null;
-    state.aiProcessing = false;
-    render();
-    await delay(800);
-    nextTurn();
-    return;
-  }
-
-  // Try matching first (only for deck draws)
-  const matchTargets = findAiMatchTargets(pIdx, drawnCard);
-  if (matchTargets.length > 0) {
-    await aiPerformMatch(pIdx, drawnCard, matchTargets);
-    state.drawnCard = null;
-    state.aiProcessing = false;
-    render();
-    await delay(800);
-    nextTurn();
-    return;
-  }
-
-  // Decide what to do with drawn card (deck draw)
-  const action = decideAiAction(pIdx, drawnCard, fromDeck);
-
-  if (action.type === 'swap') {
-    const oldCard = player.cards[action.cardIdx];
-    player.cards[action.cardIdx] = drawnCard;
-    setMemory(pIdx, pIdx, action.cardIdx, drawnCard);
-    discardCard(oldCard);
-    addLog(player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.');
-    state.message = player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.';
-  } else if (action.type === 'power') {
-    discardCard(drawnCard);
-    addLog(player.name + ' used ' + cardName(drawnCard) + "'s power.");
-    state.message = player.name + ' used ' + cardName(drawnCard) + "'s power.";
-    render();
-    await delay(800);
-    await aiUsePower(pIdx, drawnCard);
   } else {
-    // discard
-    discardCard(drawnCard);
-    addLog(player.name + ' discarded ' + cardName(drawnCard) + '.');
-    state.message = player.name + ' discarded ' + cardName(drawnCard) + '.';
+    // Try matching first (only for deck draws)
+    const matchTargets = findAiMatchTargets(pIdx, drawnCard);
+    if (matchTargets.length > 0) {
+      await aiPerformMatch(pIdx, drawnCard, matchTargets);
+      state.drawnCard = null;
+    } else {
+      // Decide what to do with drawn card (deck draw)
+      const action = decideAiAction(pIdx, drawnCard, fromDeck);
+
+      if (action.type === 'swap') {
+        const oldCard = player.cards[action.cardIdx];
+        player.cards[action.cardIdx] = drawnCard;
+        setMemory(pIdx, pIdx, action.cardIdx, drawnCard);
+        discardCard(oldCard);
+        addLog(player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.');
+        state.message = player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.';
+      } else if (action.type === 'power') {
+        discardCard(drawnCard);
+        addLog(player.name + ' used ' + cardName(drawnCard) + "'s power.");
+        state.message = player.name + ' used ' + cardName(drawnCard) + "'s power.";
+        render();
+        await delay(800);
+        await aiUsePower(pIdx, drawnCard);
+      } else {
+        discardCard(drawnCard);
+        addLog(player.name + ' discarded ' + cardName(drawnCard) + '.');
+        state.message = player.name + ' discarded ' + cardName(drawnCard) + '.';
+      }
+      state.drawnCard = null;
+    }
   }
 
-  state.drawnCard = null;
-  state.aiProcessing = false;
+  // After action: check if AI wants to call Cabo
   render();
   await delay(800);
+
+  if (state.caboCallerIndex === null && shouldAiCallCabo(pIdx)) {
+    state.caboCallerIndex = pIdx;
+    state.turnsUntilEnd = state.numPlayers;
+    state.message = player.name + ' called CABO!';
+    addLog(player.name + ' called CABO!');
+    render();
+    await delay(1500);
+  }
+
+  state.aiProcessing = false;
   nextTurn();
 }
 
