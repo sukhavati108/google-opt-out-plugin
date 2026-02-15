@@ -916,3 +916,77 @@ body {
     text-align: center;
   }
 }
+
+/* Developer Stats Overlay */
+.dev-stats-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.dev-stats-content {
+  background: #1a2a1a;
+  border: 2px solid #4a9;
+  border-radius: 16px;
+  padding: 24px 32px;
+  text-align: center;
+  max-width: 700px;
+  width: 95%;
+  max-height: 85vh;
+  overflow-y: auto;
+  color: #ddd;
+}
+
+.dev-stats-content h2 {
+  color: #4a9;
+  font-size: 1.4rem;
+  margin-bottom: 16px;
+}
+
+.dev-stats-content h3 {
+  color: #7cb;
+  font-size: 1rem;
+  margin: 16px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dev-stats-avg {
+  font-size: 1.1rem;
+  color: #f1c40f;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.dev-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+}
+
+.dev-stats-table th,
+.dev-stats-table td {
+  padding: 4px 8px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.dev-stats-table th {
+  color: #4a9;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.dev-stats-table td:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+
+.dev-stats-buttons {
+  margin-top: 16px;
+}
