@@ -465,6 +465,17 @@ body {
   transform: translateY(-4px);
 }
 
+.card-ai-highlight {
+  box-shadow: 0 0 0 3px #e67e22, 0 0 20px rgba(230, 126, 34, 0.7) !important;
+  transform: translateY(-4px);
+  animation: ai-glow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes ai-glow {
+  from { box-shadow: 0 0 0 3px #e67e22, 0 0 12px rgba(230, 126, 34, 0.5); }
+  to   { box-shadow: 0 0 0 3px #f39c12, 0 0 24px rgba(243, 156, 18, 0.8); }
+}
+
 .card-memory {
   font-size: 0.65rem;
   color: #8bb8e8;

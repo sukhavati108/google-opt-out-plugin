@@ -108,6 +108,7 @@ const state = {
   pendingGives: [],
   powerSwapFirst: null,
   peekReveal: null, // {pIdx, cIdx} - card to temporarily show face-up
+  aiHighlights: new Set(), // Set of 'pIdx-cIdx' keys to glow during AI actions
   message: '',
   log: [],
   humanMemory: new Map(),
@@ -140,6 +141,14 @@ function resetState() {
   state.scores = [];
   state.aiProcessing = false;
   state.turnLock = false;
+  state.aiHighlights = new Set();
+}
+
+async function flashAiHighlight(keys, ms) {
+  state.aiHighlights = new Set(Array.isArray(keys) ? keys : [keys]);
+  render();
+  await delay(ms || 2000);
+  state.aiHighlights.clear();
 }
 
 function startMatch(numPlayers, totalRounds) {
@@ -471,6 +480,7 @@ function createCardElement(card, options) {
   if (opts.highlight === 'success') div.classList.add('card-highlight-success');
   if (opts.highlight === 'fail') div.classList.add('card-highlight-fail');
   if (opts.highlight === 'peek') div.classList.add('card-peek');
+  if (opts.highlight === 'ai') div.classList.add('card-ai-highlight');
 
   slot.appendChild(div);
 
@@ -526,7 +536,8 @@ function renderOpponents() {
       if (state.phase === 'peek_other') clickable = true;
       if (state.phase === 'swap_cards_1' || state.phase === 'swap_cards_2') clickable = true;
 
-      const highlight = isPeekRevealed ? 'peek' : null;
+      let highlight = isPeekRevealed ? 'peek' : null;
+      if (!highlight && state.aiHighlights.has(key)) highlight = 'ai';
       const el = createCardElement(card, { faceUp: showFace, clickable, selected, memory: memStr, highlight });
       if (clickable) {
         el.firstChild.addEventListener('click', () => onCardClick(p, c));
@@ -636,7 +647,8 @@ function renderPlayer() {
     if (state.phase === 'peek_self') clickable = true;
     if (state.phase === 'swap_cards_1' || state.phase === 'swap_cards_2') clickable = true;
 
-    const highlight = isPeekRevealed ? 'peek' : null;
+    let highlight = isPeekRevealed ? 'peek' : null;
+    if (!highlight && state.aiHighlights.has(key)) highlight = 'ai';
     const el = createCardElement(card, { faceUp: isFaceUp, clickable, selected, memory: memStr, highlight });
     if (clickable) {
       el.firstChild.addEventListener('click', () => onCardClick(0, c));
@@ -1265,7 +1277,7 @@ async function runAiTurn(pIdx) {
 
   state.message = player.name + ' is thinking...';
   render();
-  await delay(800);
+  await delay(2000);
 
   // Decide draw source
   const topDiscard = getTopDiscard();
@@ -1292,7 +1304,7 @@ async function runAiTurn(pIdx) {
   state.drawnCard = drawnCard;
   state.drawnFrom = fromDeck ? 'deck' : 'discard';
   render();
-  await delay(1000);
+  await delay(2000);
 
   // If taken from discard, always swap with the intended card
   if (!fromDeck) {
@@ -1303,13 +1315,17 @@ async function runAiTurn(pIdx) {
       setMemory(pIdx, pIdx, swapIdx, drawnCard);
       discardCard(oldCard);
       addLog(player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.');
-      state.message = player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.';
+      state.message = player.name + ' placed ' + cardName(drawnCard) + ' into their hand. Discarded ' + cardName(oldCard) + '.';
+      state.drawnCard = null;
+      await flashAiHighlight(pIdx + '-' + swapIdx, 2000);
     } else {
       discardCard(drawnCard);
       addLog(player.name + ' discarded ' + cardName(drawnCard) + '.');
       state.message = player.name + ' discarded ' + cardName(drawnCard) + '.';
+      state.drawnCard = null;
+      render();
+      await delay(2000);
     }
-    state.drawnCard = null;
   } else {
     // Try matching first (only for deck draws)
     const matchTargets = findAiMatchTargets(pIdx, drawnCard);
@@ -1326,13 +1342,15 @@ async function runAiTurn(pIdx) {
         setMemory(pIdx, pIdx, action.cardIdx, drawnCard);
         discardCard(oldCard);
         addLog(player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.');
-        state.message = player.name + ' swapped a card. Discarded ' + cardName(oldCard) + '.';
+        state.message = player.name + ' placed a card into their hand. Discarded ' + cardName(oldCard) + '.';
+        state.drawnCard = null;
+        await flashAiHighlight(pIdx + '-' + action.cardIdx, 2000);
       } else if (action.type === 'power') {
         discardCard(drawnCard);
         addLog(player.name + ' used ' + cardName(drawnCard) + "'s power.");
         state.message = player.name + ' used ' + cardName(drawnCard) + "'s power.";
         render();
-        await delay(800);
+        await delay(2000);
         await aiUsePower(pIdx, drawnCard);
       } else {
         discardCard(drawnCard);
@@ -1345,7 +1363,7 @@ async function runAiTurn(pIdx) {
 
   // After action: check if AI wants to call Cabo
   render();
-  await delay(800);
+  await delay(2000);
 
   if (state.caboCallerIndex === null && shouldAiCallCabo(pIdx)) {
     state.caboCallerIndex = pIdx;
@@ -1353,7 +1371,7 @@ async function runAiTurn(pIdx) {
     state.message = player.name + ' called CABO!';
     addLog(player.name + ' called CABO!');
     render();
-    await delay(1500);
+    await delay(2500);
   }
 
   state.aiProcessing = false;
@@ -1463,15 +1481,18 @@ async function aiPerformMatch(pIdx, drawnCard, targets) {
   addLog(player.name + ' is matching ' + drawnCard.rank + 's!');
   state.message = player.name + ' is matching ' + drawnCard.rank + 's!';
   render();
-  await delay(800);
+  await delay(2000);
 
   for (const t of targets) {
     const card = state.players[t.pIdx].cards[t.cIdx];
     if (!card) continue;
 
     if (card.rank === drawnCard.rank) {
-      // Correct match
-      addLog(player.name + ' matched ' + (t.pIdx === pIdx ? 'their own' : state.players[t.pIdx].name + "'s") + ' ' + cardName(card) + '!');
+      // Correct match — highlight the matched card
+      const matchMsg = player.name + ' matched ' + (t.pIdx === pIdx ? 'their own' : state.players[t.pIdx].name + "'s") + ' ' + cardName(card) + '!';
+      addLog(matchMsg);
+      state.message = matchMsg;
+      await flashAiHighlight(t.pIdx + '-' + t.cIdx, 2000);
 
       if (t.pIdx === pIdx) {
         // Own card: just remove it
@@ -1501,10 +1522,14 @@ async function aiPerformMatch(pIdx, drawnCard, targets) {
           state.players[pIdx].cards[worstIdx] = null;
           clearMemoryAt(pIdx, worstIdx);
           clearMemoryAt(t.pIdx, t.cIdx);
+          // Highlight both the given-to slot and the emptied slot
+          state.message = player.name + ' gave a card to ' + state.players[t.pIdx].name + '.';
+          await flashAiHighlight([t.pIdx + '-' + t.cIdx, pIdx + '-' + worstIdx], 2000);
         }
       }
     }
-    await delay(500);
+    render();
+    await delay(1000);
   }
 
   discardCard(drawnCard);
@@ -1609,6 +1634,7 @@ async function aiUsePower(pIdx, card) {
       setMemory(pIdx, pIdx, cIdx, peeked);
       addLog(player.name + ' peeked at one of their own cards.');
       state.message = player.name + ' peeked at one of their own cards.';
+      await flashAiHighlight(pIdx + '-' + cIdx, 2000);
     }
   } else if (powerType === 'peek_other') {
     // Peek at an unknown opponent card
@@ -1627,6 +1653,7 @@ async function aiUsePower(pIdx, card) {
       const targetName = t.p === 0 ? 'your' : state.players[t.p].name + "'s";
       addLog(player.name + ' peeked at ' + targetName + ' card.');
       state.message = player.name + ' peeked at one of ' + targetName + ' cards.';
+      await flashAiHighlight(t.p + '-' + t.c, 2000);
     }
   } else if (powerType === 'swap_cards') {
     // Try to swap a known high own card with a known low opponent card
@@ -1687,6 +1714,7 @@ async function aiUsePower(pIdx, card) {
       const name2 = bestSwap.p2 === 0 ? 'your' : state.players[bestSwap.p2].name + "'s";
       addLog(player.name + ' swapped their card with ' + name2 + ' card!');
       state.message = player.name + ' swapped their card with ' + name2 + ' card!';
+      await flashAiHighlight([key1, key2], 2500);
     } else {
       // Random swap or skip
       addLog(player.name + ' swapped two cards on the table.');
@@ -1727,6 +1755,8 @@ async function aiUsePower(pIdx, card) {
         state.humanMemory.delete(k2);
         if (hm1) state.humanMemory.set(k2, hm1);
         if (hm2) state.humanMemory.set(k1, hm2);
+
+        await flashAiHighlight([k1, k2], 2500);
       }
     }
   }
