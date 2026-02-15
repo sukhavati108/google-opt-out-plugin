@@ -37,7 +37,7 @@ function getCardValue(card) {
   if (card.rank === 'A') return 1;
   if (card.rank === 'J') return 11;
   if (card.rank === 'Q') return 12;
-  if (card.rank === 'K') return card.suit === 'diamonds' ? 0 : 13;
+  if (card.rank === 'K') return isRedSuit(card.suit) ? 0 : 13;
   return parseInt(card.rank);
 }
 
