@@ -464,7 +464,9 @@ function finishHumanAction(msg) {
 
 // Pause during an AI turn so the human can match against the new top discard.
 // Returns a Promise that resolves when the human clicks Continue.
+// Skips the pause if the human is the Cabo caller (their round is over).
 function humanMatchPause() {
+  if (state.caboCallerIndex === 0) return Promise.resolve();
   const topDiscard = getTopDiscard();
   if (!topDiscard) return Promise.resolve();
   state.phase = 'ai_match_pause';
