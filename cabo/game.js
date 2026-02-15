@@ -1848,8 +1848,9 @@ function findAiDiscardSwapTarget(pIdx, card) {
     const key = pIdx + '-' + c;
     const known = mem.get(key);
     if (known) {
-      // Never swap out a Joker
+      // Never swap out a Joker or Red King
       if (known.rank === 'Joker') continue;
+      if (known.rank === 'K' && isRedSuit(known.suit)) continue;
       const val = getCardValue(known);
       if (val > value && val > worstVal) {
         worstVal = val;
@@ -1947,7 +1948,7 @@ async function aiPerformMatch(pIdx, drawnCard, targets) {
         state.players[t.pIdx].cards[t.cIdx] = null;
         clearMemoryAt(t.pIdx, t.cIdx);
 
-        // Give worst card from own hand (never give a known Joker)
+        // Give worst card from own hand (never give a known Joker or Red King)
         const ownCards = nonNullCardIndices(pIdx);
         if (ownCards.length > 0) {
           let worstIdx = ownCards[0];
@@ -1956,6 +1957,7 @@ async function aiPerformMatch(pIdx, drawnCard, targets) {
             const key = pIdx + '-' + ci;
             const known = state.aiMemory[pIdx].get(key);
             if (known && known.rank === 'Joker') continue;
+            if (known && known.rank === 'K' && isRedSuit(known.suit)) continue;
             const val = known ? getCardValue(known) : 7;
             if (val > worstVal) {
               worstVal = val;
@@ -1984,7 +1986,7 @@ function decideAiAction(pIdx, drawnCard, fromDeck) {
   const cards = state.players[pIdx].cards;
   const drawnValue = getCardValue(drawnCard);
 
-  // Find worst known card (never consider Jokers as swap candidates)
+  // Find worst known card (never consider Jokers or Red Kings as swap candidates)
   let worstIdx = -1;
   let worstVal = -1;
   let unknownIndices = [];
@@ -1995,6 +1997,7 @@ function decideAiAction(pIdx, drawnCard, fromDeck) {
     const known = mem.get(key);
     if (known) {
       if (known.rank === 'Joker') continue; // Never swap out a Joker
+      if (known.rank === 'K' && isRedSuit(known.suit)) continue; // Never swap out a Red King
       const val = getCardValue(known);
       if (val > worstVal) {
         worstVal = val;
@@ -2013,8 +2016,10 @@ function decideAiAction(pIdx, drawnCard, fromDeck) {
     if (unknownIndices.length > 0) {
       return { type: 'swap', cardIdx: unknownIndices[Math.floor(Math.random() * unknownIndices.length)] };
     }
-    // All known cards are Jokers/Red Kings — still swap with highest
-    if (worstIdx >= 0) return { type: 'swap', cardIdx: worstIdx };
+    // All known cards are Jokers/Red Kings — swap with any non-null card
+    for (let c = 0; c < cards.length; c++) {
+      if (cards[c]) return { type: 'swap', cardIdx: c };
+    }
   }
 
   // One-eyed king: always swap with worst card
@@ -2127,6 +2132,7 @@ async function aiUsePower(pIdx, card) {
       const ownKnown = mem.get(ownKey);
       if (!ownKnown) continue;
       if (ownKnown.rank === 'Joker') continue; // Never swap away a Joker
+      if (ownKnown.rank === 'K' && isRedSuit(ownKnown.suit)) continue; // Never swap away a Red King
       const ownVal = getCardValue(ownKnown);
 
       for (let p = 0; p < state.numPlayers; p++) {
@@ -2208,18 +2214,19 @@ async function aiUseBlackKingPower(pIdx) {
   }
   if (ownCards.length === 0 || oppCards.length === 0) return;
 
-  // Pick own card: prefer unknown, then highest known (never pick a known Joker)
+  // Pick own card: prefer unknown, then highest known (never pick a Joker or Red King)
   let ownIdx;
   const ownUnknowns = ownCards.filter(c => !mem.has(pIdx + '-' + c));
   if (ownUnknowns.length > 0) {
     ownIdx = ownUnknowns[Math.floor(Math.random() * ownUnknowns.length)];
   } else {
-    // Pick the highest valued known card, excluding Jokers
+    // Pick the highest valued known card, excluding Jokers and Red Kings
     let bestIdx = ownCards[0];
     let bestVal = -Infinity;
     for (const ci of ownCards) {
       const known = mem.get(pIdx + '-' + ci);
       if (known && known.rank === 'Joker') continue;
+      if (known && known.rank === 'K' && isRedSuit(known.suit)) continue;
       const val = known ? getCardValue(known) : 0;
       if (val > bestVal) { bestVal = val; bestIdx = ci; }
     }
@@ -2284,8 +2291,11 @@ async function aiUseBlackKingPower(pIdx) {
   const ownVal = ownMem ? getCardValue(ownMem) : (ownCardObj ? getCardValue(ownCardObj) : 7);
   const oppVal = oppMem ? getCardValue(oppMem) : (oppCardObj ? getCardValue(oppCardObj) : 7);
 
+  // Never swap away a Joker or Red King, even if opponent's card looks better
+  const ownIsProtected = (ownMem && ownMem.rank === 'Joker') ||
+    (ownMem && ownMem.rank === 'K' && isRedSuit(ownMem.suit));
   // Swap if opponent's card is lower (better for AI) and the difference is meaningful
-  const shouldSwap = oppVal < ownVal - 1;
+  const shouldSwap = !ownIsProtected && oppVal < ownVal - 1;
 
   if (shouldSwap && ownCardObj && oppCardObj) {
     state.players[pIdx].cards[ownIdx] = oppCardObj;
