@@ -450,15 +450,12 @@ function nextTurn() {
 }
 
 function finishHumanAction(msg) {
-  if (state.caboCallerIndex !== null) {
-    // Cabo already called, just proceed to next turn
-    state.message = msg || 'Done.';
-    render();
-    setTimeout(() => nextTurn(), 600);
-    return;
-  }
   state.phase = 'turn_end';
-  state.message = msg ? msg + ' End your turn or call Cabo.' : 'End your turn or call Cabo.';
+  if (state.caboCallerIndex !== null) {
+    state.message = msg ? msg + ' Match or end your turn.' : 'Match or end your turn.';
+  } else {
+    state.message = msg ? msg + ' End your turn or call Cabo.' : 'End your turn or call Cabo.';
+  }
   render();
 }
 
