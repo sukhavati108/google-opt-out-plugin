@@ -686,6 +686,7 @@ function createCardElement(card, options) {
 function renderOpponents() {
   const area = document.getElementById('opponents-area');
   area.innerHTML = '';
+  area.setAttribute('data-opponents', state.numPlayers - 1);
 
   for (let p = 1; p < state.numPlayers; p++) {
     const player = state.players[p];
@@ -2350,6 +2351,143 @@ function showGameScreen() {
   document.getElementById('game-screen').style.display = '';
 }
 
+// ---- Developer Stats ----
+function showDevStats() {
+  const existing = document.querySelector('.dev-stats-overlay');
+  if (existing) { existing.remove(); return; }
+
+  const NUM_DEALS = 10000;
+  const allRanks = ['Joker', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+
+  // Position frequency: positionCounts[pos][rank] = count
+  const positionCounts = Array.from({ length: 4 }, () => {
+    const m = {};
+    for (const r of allRanks) m[r] = 0;
+    return m;
+  });
+
+  // First discard frequency
+  const discardCounts = {};
+  for (const r of allRanks) discardCounts[r] = 0;
+
+  let totalHandValue = 0;
+
+  for (let d = 0; d < NUM_DEALS; d++) {
+    const deck = shuffle(createDeck());
+    // Deal 4 cards to player 0 (same as initGame)
+    const hand = [deck.pop(), deck.pop(), deck.pop(), deck.pop()];
+    for (let c = 0; c < 4; c++) {
+      positionCounts[c][hand[c].rank]++;
+    }
+    totalHandValue += hand.reduce((sum, card) => sum + getCardValue(card), 0);
+    // First discard is next card after all players dealt
+    // In a 2-player game that's 8 cards dealt, then discard; but for stats
+    // we care about the first discard from the deck after dealing player 0
+    const discardIdx = deck.length - 1 - (4 * 3); // skip 3 more players' worth
+    const discardCard = deck[Math.max(0, discardIdx)] || deck[0];
+    discardCounts[discardCard.rank]++;
+  }
+
+  const avgHand = (totalHandValue / NUM_DEALS).toFixed(2);
+
+  // Build overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'dev-stats-overlay';
+
+  const content = document.createElement('div');
+  content.className = 'dev-stats-content';
+
+  const h2 = document.createElement('h2');
+  h2.textContent = 'Developer Stats (' + NUM_DEALS.toLocaleString() + ' deals)';
+  content.appendChild(h2);
+
+  // Average hand value
+  const avgDiv = document.createElement('div');
+  avgDiv.className = 'dev-stats-avg';
+  avgDiv.textContent = 'Average starting hand value: ' + avgHand;
+  content.appendChild(avgDiv);
+
+  // Position frequency table
+  const h3pos = document.createElement('h3');
+  h3pos.textContent = 'Card rank frequency by starting position';
+  content.appendChild(h3pos);
+
+  const table = document.createElement('table');
+  table.className = 'dev-stats-table';
+  const thead = document.createElement('thead');
+  let headerHTML = '<tr><th>Rank</th>';
+  for (let p = 0; p < 4; p++) headerHTML += '<th>Pos ' + (p + 1) + '</th>';
+  headerHTML += '</tr>';
+  thead.innerHTML = headerHTML;
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  const expected = NUM_DEALS / 13.5; // 54 cards, 4 dealt out of 54
+  for (const rank of allRanks) {
+    const tr = document.createElement('tr');
+    const tdRank = document.createElement('td');
+    tdRank.textContent = rank;
+    tr.appendChild(tdRank);
+    for (let p = 0; p < 4; p++) {
+      const td = document.createElement('td');
+      const count = positionCounts[p][rank];
+      td.textContent = count;
+      // Highlight if >15% off expected for that rank
+      const expectedForRank = rank === 'Joker'
+        ? NUM_DEALS * (2 / 54)
+        : NUM_DEALS * (4 / 54);
+      if (Math.abs(count - expectedForRank) / expectedForRank > 0.15) {
+        td.style.color = '#e74c3c';
+      }
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  content.appendChild(table);
+
+  // First discard distribution
+  const h3disc = document.createElement('h3');
+  h3disc.textContent = 'First discard card distribution';
+  content.appendChild(h3disc);
+
+  const dtable = document.createElement('table');
+  dtable.className = 'dev-stats-table';
+  const dthead = document.createElement('thead');
+  dthead.innerHTML = '<tr><th>Rank</th><th>Count</th><th>%</th></tr>';
+  dtable.appendChild(dthead);
+
+  const dtbody = document.createElement('tbody');
+  for (const rank of allRanks) {
+    const tr = document.createElement('tr');
+    const tdRank = document.createElement('td');
+    tdRank.textContent = rank;
+    const tdCount = document.createElement('td');
+    tdCount.textContent = discardCounts[rank];
+    const tdPct = document.createElement('td');
+    tdPct.textContent = ((discardCounts[rank] / NUM_DEALS) * 100).toFixed(1) + '%';
+    tr.appendChild(tdRank);
+    tr.appendChild(tdCount);
+    tr.appendChild(tdPct);
+    dtbody.appendChild(tr);
+  }
+  dtable.appendChild(dtbody);
+  content.appendChild(dtable);
+
+  // Close button
+  const btnDiv = document.createElement('div');
+  btnDiv.className = 'dev-stats-buttons';
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'btn btn-primary';
+  closeBtn.textContent = 'Close';
+  closeBtn.addEventListener('click', () => overlay.remove());
+  btnDiv.appendChild(closeBtn);
+  content.appendChild(btnDiv);
+
+  overlay.appendChild(content);
+  document.body.appendChild(overlay);
+}
+
 // ---- Initialization ----
 document.addEventListener('DOMContentLoaded', () => {
   const startBtn = document.getElementById('start-btn');
@@ -2359,6 +2497,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const customRounds = document.getElementById('custom-rounds');
   roundCount.addEventListener('change', () => {
     customRounds.style.display = roundCount.value === 'custom' ? 'inline-block' : 'none';
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'd' || e.key === 'D') {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+      showDevStats();
+    }
   });
 
   startBtn.addEventListener('click', () => {
