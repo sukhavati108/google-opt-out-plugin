@@ -137,6 +137,7 @@ const state = {
   blackKingOpponentSelection: null, // {pIdx, cIdx}
   matchPreviousPhase: null,
   matchGiveTarget: null, // {pIdx, cIdx}
+  aiMatchPauseResolve: null,
 };
 
 function resetState() {
@@ -165,6 +166,7 @@ function resetState() {
   state.blackKingOpponentSelection = null;
   state.matchPreviousPhase = null;
   state.matchGiveTarget = null;
+  state.aiMatchPauseResolve = null;
 }
 
 async function flashAiHighlight(keys, ms) {
@@ -432,6 +434,7 @@ function nextTurn() {
   state.blackKingOpponentSelection = null;
   state.matchPreviousPhase = null;
   state.matchGiveTarget = null;
+  state.aiMatchPauseResolve = null;
 
   const player = state.players[state.currentPlayerIndex];
   if (player.isHuman) {
@@ -457,6 +460,20 @@ function finishHumanAction(msg) {
     state.message = msg ? msg + ' End your turn or call Cabo.' : 'End your turn or call Cabo.';
   }
   render();
+}
+
+// Pause during an AI turn so the human can match against the new top discard.
+// Returns a Promise that resolves when the human clicks Continue.
+function humanMatchPause() {
+  const topDiscard = getTopDiscard();
+  if (!topDiscard) return Promise.resolve();
+  state.phase = 'ai_match_pause';
+  state.matchPreviousPhase = 'ai_match_pause';
+  state.message = cardName(topDiscard) + ' on discard pile. Match against it or continue.';
+  render();
+  return new Promise(resolve => {
+    state.aiMatchPauseResolve = resolve;
+  });
 }
 
 function returnToDrawDecision(msg) {
@@ -700,6 +717,7 @@ function renderOpponents() {
       let selected = state.selectedCards.has(key);
 
       if (state.phase === 'match_mode') clickable = true;
+      if (state.phase === 'ai_match_pause') clickable = true;
       if (state.phase === 'peek_other') clickable = true;
       if (state.phase === 'swap_cards_1' || state.phase === 'swap_cards_2') clickable = true;
       if (state.phase === 'black_king_select') clickable = true;
@@ -816,6 +834,7 @@ function renderPlayer() {
 
     if (state.phase === 'swap_select') clickable = true;
     if (state.phase === 'match_mode') clickable = true;
+    if (state.phase === 'ai_match_pause') clickable = true;
     if (state.phase === 'match_give') clickable = true;
     if (state.phase === 'peek_self') clickable = true;
     if (state.phase === 'swap_cards_1' || state.phase === 'swap_cards_2') clickable = true;
@@ -855,7 +874,7 @@ function renderActions() {
   }
 
   // Persistent Match button — available at any point during the human player's turn
-  if (['turn_start', 'draw_decision', 'swap_select', 'turn_end'].indexOf(state.phase) !== -1) {
+  if (['turn_start', 'draw_decision', 'swap_select', 'turn_end', 'ai_match_pause'].indexOf(state.phase) !== -1) {
     const topDiscard = getTopDiscard();
     if (topDiscard) {
       addButton(area, 'Match (' + topDiscard.rank + ')', 'btn btn-secondary', () => {
@@ -865,6 +884,17 @@ function renderActions() {
         render();
       });
     }
+  }
+
+  // During AI turn pause: Continue button to resume AI play
+  if (state.phase === 'ai_match_pause') {
+    addButton(area, 'Continue', 'btn btn-primary', () => {
+      const resolve = state.aiMatchPauseResolve;
+      state.aiMatchPauseResolve = null;
+      state.phase = 'ai_thinking';
+      render();
+      if (resolve) resolve();
+    });
   }
 
   if (state.phase === 'turn_end') {
@@ -909,6 +939,15 @@ function renderActions() {
     addButton(area, 'Done Matching', 'btn btn-primary', () => {
       const prev = state.matchPreviousPhase || 'turn_start';
       state.matchPreviousPhase = null;
+      if (prev === 'ai_match_pause') {
+        // Resume AI turn
+        const resolve = state.aiMatchPauseResolve;
+        state.aiMatchPauseResolve = null;
+        state.phase = 'ai_thinking';
+        render();
+        if (resolve) resolve();
+        return;
+      }
       state.phase = prev;
       if (prev === 'turn_start') {
         state.message = 'Your turn! Draw from the deck or discard pile.';
@@ -1260,6 +1299,14 @@ function onCardClick(pIdx, cIdx) {
     return;
   }
 
+  if (state.phase === 'ai_match_pause') {
+    // Clicking a card during AI pause enters match mode and attempts match
+    state.matchPreviousPhase = 'ai_match_pause';
+    state.phase = 'match_mode';
+    attemptMatch(pIdx, cIdx);
+    return;
+  }
+
   if (state.phase === 'match_give') {
     if (pIdx !== 0) return;
     performGiveCard(cIdx);
@@ -1597,6 +1644,7 @@ async function runAiTurn(pIdx) {
     if (matchTargets.length > 0) {
       await aiPerformMatch(pIdx, topDiscardForMatch, matchTargets);
       await delay(1000);
+      await humanMatchPause();
     }
   }
 
@@ -1639,6 +1687,7 @@ async function runAiTurn(pIdx) {
       state.message = player.name + ' placed ' + cardName(drawnCard) + ' into their hand. Discarded ' + cardName(oldCard) + '.';
       state.drawnCard = null;
       await flashAiHighlight(pIdx + '-' + swapIdx, 2000);
+      await humanMatchPause();
     } else {
       discardCard(drawnCard);
       addLog(player.name + ' discarded ' + cardName(drawnCard) + '.');
@@ -1646,6 +1695,7 @@ async function runAiTurn(pIdx) {
       state.drawnCard = null;
       render();
       await delay(2000);
+      await humanMatchPause();
     }
   } else {
     // Decide what to do with drawn card (deck draw)
@@ -1660,6 +1710,7 @@ async function runAiTurn(pIdx) {
       state.message = player.name + ' placed a card into their hand. Discarded ' + cardName(oldCard) + '.';
       state.drawnCard = null;
       await flashAiHighlight(pIdx + '-' + action.cardIdx, 2000);
+      await humanMatchPause();
     } else if (action.type === 'power') {
       discardCard(drawnCard);
       addLog(player.name + ' used ' + cardName(drawnCard) + "'s power.");
@@ -1667,10 +1718,15 @@ async function runAiTurn(pIdx) {
       render();
       await delay(2000);
       await aiUsePower(pIdx, drawnCard);
+      await humanMatchPause();
     } else {
       discardCard(drawnCard);
       addLog(player.name + ' discarded ' + cardName(drawnCard) + '.');
       state.message = player.name + ' discarded ' + cardName(drawnCard) + '.';
+      state.drawnCard = null;
+      render();
+      await delay(1000);
+      await humanMatchPause();
     }
     state.drawnCard = null;
   }
@@ -1684,6 +1740,7 @@ async function runAiTurn(pIdx) {
       await delay(1000);
       await aiPerformMatch(pIdx, postDiscard, postMatchTargets);
       await delay(1000);
+      await humanMatchPause();
     }
   }
 
