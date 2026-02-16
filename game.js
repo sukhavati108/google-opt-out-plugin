@@ -970,7 +970,7 @@ function renderActions() {
       } else if (prev === 'draw_decision') {
         state.message = 'You drew ' + cardName(state.drawnCard) + '. What will you do?';
       } else if (prev === 'turn_end') {
-        state.message = 'End your turn or call Cabo.';
+        state.message = state.caboCallerIndex !== null ? 'End your turn.' : 'End your turn or call Cabo.';
       } else if (prev === 'swap_select') {
         state.message = 'Click one of your cards to swap with ' + cardName(state.drawnCard) + '.';
       }
