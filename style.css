@@ -563,6 +563,15 @@ body {
   font-weight: 800;
 }
 
+.joker-corner {
+  font-size: 0.55rem;
+  letter-spacing: 0.02em;
+}
+
+.joker-label {
+  font-size: 1.4rem;
+}
+
 .corner-suit {
   font-size: 0.8rem;
   line-height: 1;
@@ -871,6 +880,14 @@ body {
 
   .corner-rank {
     font-size: 0.8rem;
+  }
+
+  .joker-corner {
+    font-size: 0.45rem;
+  }
+
+  .joker-label {
+    font-size: 1.1rem;
   }
 
   .corner-suit {
