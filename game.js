@@ -1923,6 +1923,11 @@ function shouldAiTakeDiscard(pIdx, topDiscard) {
 }
 
 function findAiMatchTargets(pIdx, drawnCard) {
+  // Never match Jokers or Red Kings — they're worth 0 or less,
+  // so removing them has no benefit (or hurts your score).
+  if (drawnCard.rank === 'Joker') return [];
+  if (drawnCard.rank === 'K' && isRedSuit(drawnCard.suit)) return [];
+
   const mem = state.aiMemory[pIdx];
   const targets = [];
 
