@@ -61,6 +61,26 @@ body {
   color: #ccc;
 }
 
+.memory-aid-label {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.memory-aid-label:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.memory-aid-text {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
 .start-options select {
   padding: 8px 12px;
   border-radius: 6px;
@@ -85,6 +105,7 @@ body {
 .start-options input[type="checkbox"] {
   margin-right: 8px;
   transform: scale(1.1);
+  cursor: pointer;
 }
 
 .rules-summary {
