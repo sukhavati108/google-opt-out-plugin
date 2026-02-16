@@ -2648,6 +2648,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const memoryAid = document.getElementById('memory-aid');
   const roundCount = document.getElementById('round-count');
   const customRounds = document.getElementById('custom-rounds');
+  const memoryAidText = document.querySelector('.memory-aid-text');
+  memoryAid.addEventListener('change', () => {
+    memoryAidText.textContent = memoryAid.checked
+      ? '\u2611 Remembered card values will be shown during play'
+      : '\u2610 Check box to show remembered card values during play';
+  });
   document.getElementById('how-to-play-btn').addEventListener('click', showRulesOverlay);
   roundCount.addEventListener('change', () => {
     customRounds.style.display = roundCount.value === 'custom' ? 'inline-block' : 'none';
