@@ -936,17 +936,17 @@ function renderActions() {
       render();
     });
 
-    addButton(area, 'Discard', 'btn btn-secondary', () => {
-      addLog('You discarded ' + cardName(state.drawnCard) + '.');
-      discardCard(state.drawnCard);
-      state.drawnCard = null;
-      finishHumanAction('Discarded.');
-    });
-
     if (state.drawnFrom === 'deck' && isPowerCard(state.drawnCard)) {
       const desc = getPowerDescription(state.drawnCard);
-      addButton(area, 'Use Power (' + desc + ')', 'btn btn-primary', () => {
+      addButton(area, 'Discard & Use Power (' + desc + ')', 'btn btn-primary', () => {
         usePowerCard();
+      });
+    } else {
+      addButton(area, 'Discard', 'btn btn-secondary', () => {
+        addLog('You discarded ' + cardName(state.drawnCard) + '.');
+        discardCard(state.drawnCard);
+        state.drawnCard = null;
+        finishHumanAction('Discarded.');
       });
     }
   }
