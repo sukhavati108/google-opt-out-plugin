@@ -2651,8 +2651,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const memoryAidText = document.querySelector('.memory-aid-text');
   memoryAid.addEventListener('change', () => {
     memoryAidText.textContent = memoryAid.checked
-      ? '\u2611 Remembered card values will be shown during play'
-      : '\u2610 Check box to show remembered card values during play';
+      ? 'Memory aid is ON for this game'
+      : '<--Check this box for memory aid during play';
   });
   document.getElementById('how-to-play-btn').addEventListener('click', showRulesOverlay);
   roundCount.addEventListener('change', () => {
