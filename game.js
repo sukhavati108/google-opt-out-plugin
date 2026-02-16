@@ -47,7 +47,7 @@ function getCardValue(card) {
 
 function cardName(card) {
   if (!card) return '?';
-  if (card.rank === 'Joker') return '\u2605J';
+  if (card.rank === 'Joker') return 'Joker';
   return card.rank + SUIT_SYMBOLS[card.suit];
 }
 
@@ -562,28 +562,22 @@ function createCardElement(card, options) {
       const topCorner = document.createElement('div');
       topCorner.className = 'card-corner card-corner-top';
       const topRank = document.createElement('div');
-      topRank.className = 'corner-rank';
-      topRank.textContent = '\u2605';
+      topRank.className = 'corner-rank joker-corner';
+      topRank.textContent = 'Joker';
       topCorner.appendChild(topRank);
 
       const center = document.createElement('div');
       center.className = 'card-center card-face-center';
       const faceLabel = document.createElement('div');
-      faceLabel.className = 'face-label';
-      faceLabel.style.fontSize = '1.4em';
-      faceLabel.textContent = '\u2605';
-      const faceSuit = document.createElement('div');
-      faceSuit.className = 'face-suit';
-      faceSuit.style.fontSize = '0.65em';
-      faceSuit.textContent = 'JOKER';
+      faceLabel.className = 'face-label joker-label';
+      faceLabel.textContent = 'Joker';
       center.appendChild(faceLabel);
-      center.appendChild(faceSuit);
 
       const bottomCorner = document.createElement('div');
       bottomCorner.className = 'card-corner card-corner-bottom';
       const btmRank = document.createElement('div');
-      btmRank.className = 'corner-rank';
-      btmRank.textContent = '\u2605';
+      btmRank.className = 'corner-rank joker-corner';
+      btmRank.textContent = 'Joker';
       bottomCorner.appendChild(btmRank);
 
       div.appendChild(topCorner);
