@@ -682,6 +682,26 @@ body {
   to   { box-shadow: 0 0 0 3px #f39c12, 0 0 24px rgba(243, 156, 18, 0.8); }
 }
 
+.card-ai-known {
+  box-shadow: 0 0 0 2px #f39c12 !important;
+}
+
+.card-ai-known-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #f39c12;
+  color: #000;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 4px;
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+}
+
 .card-memory {
   font-size: 0.75rem;
   color: #8bb8e8;

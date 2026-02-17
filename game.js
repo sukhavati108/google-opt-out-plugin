@@ -539,7 +539,7 @@ function buildPipLayout(count, suit) {
 }
 
 function createCardElement(card, options) {
-  const defaults = { faceUp: false, clickable: false, selected: false, empty: false, highlight: null, memory: null };
+  const defaults = { faceUp: false, clickable: false, selected: false, empty: false, highlight: null, memory: null, aiKnownBy: null };
   const opts = Object.assign({}, defaults, options);
   const div = document.createElement('div');
   const slot = document.createElement('div');
@@ -681,7 +681,28 @@ function createCardElement(card, options) {
     slot.appendChild(memDiv);
   }
 
+  if (opts.aiKnownBy && opts.aiKnownBy.length > 0) {
+    div.classList.add('card-ai-known');
+    const badge = document.createElement('div');
+    badge.className = 'card-ai-known-badge';
+    badge.title = 'Known by: ' + opts.aiKnownBy.join(', ');
+    badge.textContent = '\uD83D\uDC41 ' + opts.aiKnownBy.length;
+    div.appendChild(badge);
+  }
+
   return slot;
+}
+
+function getAiKnownBy(pIdx, cIdx) {
+  if (!devMode) return null;
+  const key = pIdx + '-' + cIdx;
+  const knowers = [];
+  for (let ai = 1; ai < state.numPlayers; ai++) {
+    if (state.aiMemory[ai] && state.aiMemory[ai].has(key)) {
+      knowers.push(state.players[ai].name);
+    }
+  }
+  return knowers.length > 0 ? knowers : null;
 }
 
 function highlightMemoryAids() {
@@ -744,7 +765,7 @@ function renderOpponents() {
 
       let highlight = isPeekRevealed ? 'peek' : null;
       if (!highlight && state.aiHighlights.has(key)) highlight = 'ai';
-      const el = createCardElement(card, { faceUp: showFace, clickable, selected, memory: memStr, highlight });
+      const el = createCardElement(card, { faceUp: showFace, clickable, selected, memory: memStr, highlight, aiKnownBy: getAiKnownBy(p, c) });
       if (clickable) {
         el.firstChild.addEventListener('click', () => onCardClick(p, c));
       }
@@ -862,7 +883,7 @@ function renderPlayer() {
 
     let highlight = isPeekRevealed ? 'peek' : null;
     if (!highlight && state.aiHighlights.has(key)) highlight = 'ai';
-    const el = createCardElement(card, { faceUp: isFaceUp, clickable, selected, memory: memStr, highlight });
+    const el = createCardElement(card, { faceUp: isFaceUp, clickable, selected, memory: memStr, highlight, aiKnownBy: getAiKnownBy(0, c) });
     if (clickable) {
       el.firstChild.addEventListener('click', () => onCardClick(0, c));
     }
