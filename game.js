@@ -109,6 +109,7 @@ const match = {
 // ---- Game State ----
 let game = null;
 let showMemoryAids = false;
+let devMode = false;
 
 const state = {
   phase: 'start',
@@ -241,6 +242,12 @@ function initGame(numPlayers) {
 
 function addLog(msg) {
   state.log.push(msg);
+  if (state.log.length > 80) state.log.shift();
+}
+
+function addDevLog(msg) {
+  if (!devMode) return;
+  state.log.push('[DEV] ' + msg);
   if (state.log.length > 80) state.log.shift();
 }
 
@@ -716,7 +723,7 @@ function renderOpponents() {
       }
 
       const isPeekRevealed = state.peekReveal && state.peekReveal.pIdx === p && state.peekReveal.cIdx === c;
-      const showFace = state.phase === 'game_over' || state.phase === 'round_reveal' || isPeekRevealed;
+      const showFace = state.phase === 'game_over' || state.phase === 'round_reveal' || isPeekRevealed || devMode;
       const key = p + '-' + c;
       const mem = state.humanMemory.get(key);
       const memStr = mem && !showFace ? cardName(mem) : null;
@@ -795,7 +802,7 @@ function renderTable() {
     drawnArea.appendChild(drawnLabel);
 
     const isHumanTurn = state.players[state.currentPlayerIndex].isHuman;
-    const showFaceUp = isHumanTurn || state.drawnFrom === 'discard';
+    const showFaceUp = isHumanTurn || state.drawnFrom === 'discard' || devMode;
     const drawnEl = createCardElement(state.drawnCard, { faceUp: showFaceUp });
     drawnArea.appendChild(drawnEl);
   }
@@ -833,7 +840,7 @@ function renderPlayer() {
     const isPeekRevealed = state.peekReveal && state.peekReveal.pIdx === 0 && state.peekReveal.cIdx === c;
     const showFace = state.phase === 'peek' && (c === 2 || c === 3);
     const showFaceGameOver = state.phase === 'game_over' || state.phase === 'round_reveal';
-    const isFaceUp = showFace || showFaceGameOver || isPeekRevealed;
+    const isFaceUp = showFace || showFaceGameOver || isPeekRevealed || devMode;
     const mem = state.humanMemory.get(key);
     const memStr = mem && !isFaceUp ? cardName(mem) : null;
 
@@ -1105,10 +1112,14 @@ function renderLog() {
   const logContent = document.getElementById('log-content');
   logContent.innerHTML = '';
   for (const entry of state.log) {
+    if (entry.indexOf('[DEV] ') === 0 && !devMode) continue;
     const div = document.createElement('div');
     div.textContent = entry;
     if (entry.indexOf('called CABO!') !== -1) {
       div.classList.add('log-cabo');
+    }
+    if (entry.indexOf('[DEV] ') === 0) {
+      div.classList.add('log-dev');
     }
     logContent.appendChild(div);
   }
@@ -1725,6 +1736,7 @@ async function runAiTurn(pIdx) {
     drawnCard = drawFromDiscard();
     fromDeck = false;
     addLog(player.name + ' took ' + cardName(drawnCard) + ' from the discard pile.');
+    addDevLog(player.name + ' took discard because ' + cardName(drawnCard) + ' (' + getCardValue(drawnCard) + ' pts) is low enough to improve their hand.');
     state.message = player.name + ' took ' + cardName(drawnCard) + ' from the discard pile.';
   } else {
     drawnCard = drawFromDeck();
@@ -1735,6 +1747,9 @@ async function runAiTurn(pIdx) {
     }
     fromDeck = true;
     addLog(player.name + ' drew from the deck.');
+    if (topDiscard) {
+      addDevLog(player.name + ' skipped discard ' + cardName(topDiscard) + ' (' + getCardValue(topDiscard) + ' pts) — too high or no known worse card.');
+    }
     state.message = player.name + ' drew from the deck.';
   }
 
@@ -1748,6 +1763,7 @@ async function runAiTurn(pIdx) {
     const swapIdx = findAiDiscardSwapTarget(pIdx, drawnCard);
     if (swapIdx >= 0) {
       const oldCard = player.cards[swapIdx];
+      addDevLog(player.name + ' swapped ' + cardName(drawnCard) + ' (' + getCardValue(drawnCard) + ' pts) for ' + cardName(oldCard) + ' (' + getCardValue(oldCard) + ' pts) — saves ' + (getCardValue(oldCard) - getCardValue(drawnCard)) + ' pts.');
       player.cards[swapIdx] = drawnCard;
       setMemory(pIdx, pIdx, swapIdx, drawnCard);
       state.humanMemory.delete(pIdx + '-' + swapIdx); // Human sees swap but doesn't know new card
@@ -1772,6 +1788,12 @@ async function runAiTurn(pIdx) {
 
     if (action.type === 'swap') {
       const oldCard = player.cards[action.cardIdx];
+      const knownOld = aiMem.get(pIdx + '-' + action.cardIdx);
+      if (knownOld) {
+        addDevLog(player.name + ' swapped because drawn ' + cardName(drawnCard) + ' (' + getCardValue(drawnCard) + ' pts) is lower than known ' + cardName(knownOld) + ' (' + getCardValue(knownOld) + ' pts).');
+      } else {
+        addDevLog(player.name + ' swapped drawn ' + cardName(drawnCard) + ' (' + getCardValue(drawnCard) + ' pts) for an unknown card — gambling on improvement.');
+      }
       player.cards[action.cardIdx] = drawnCard;
       setMemory(pIdx, pIdx, action.cardIdx, drawnCard);
       state.humanMemory.delete(pIdx + '-' + action.cardIdx); // Human sees swap but doesn't know new card
@@ -1782,6 +1804,8 @@ async function runAiTurn(pIdx) {
       await flashAiHighlight(pIdx + '-' + action.cardIdx, 2000);
       await humanMatchPause();
     } else if (action.type === 'power') {
+      const powerDesc = getPowerType(drawnCard);
+      addDevLog(player.name + ' discarded ' + cardName(drawnCard) + ' to use its power (' + powerDesc + ').');
       discardCard(drawnCard);
       addLog(player.name + ' used ' + cardName(drawnCard) + "'s power.");
       state.message = player.name + ' used ' + cardName(drawnCard) + "'s power.";
@@ -1790,6 +1814,7 @@ async function runAiTurn(pIdx) {
       await aiUsePower(pIdx, drawnCard);
       await humanMatchPause();
     } else {
+      addDevLog(player.name + ' discarded ' + cardName(drawnCard) + ' (' + getCardValue(drawnCard) + ' pts) because all known cards are lower.');
       discardCard(drawnCard);
       addLog(player.name + ' discarded ' + cardName(drawnCard) + '.');
       state.message = player.name + ' discarded ' + cardName(drawnCard) + '.';
@@ -1823,6 +1848,15 @@ async function runAiTurn(pIdx) {
     state.turnsUntilEnd = state.numPlayers;
     state.message = player.name + ' called CABO!';
     addLog(player.name + ' called CABO!');
+    // Compute estimated hand for dev log
+    const cabMem = state.aiMemory[pIdx];
+    let cabKnown = 0, cabUnk = 0;
+    for (let c = 0; c < player.cards.length; c++) {
+      if (!player.cards[c]) continue;
+      const k = cabMem.get(pIdx + '-' + c);
+      if (k) cabKnown += getCardValue(k); else cabUnk++;
+    }
+    addDevLog(player.name + ' called Cabo — estimated hand: ' + (cabKnown + cabUnk * 6) + ' pts (known: ' + cabKnown + ', ' + cabUnk + ' unknown).');
     render();
     await showCaboOverlay(player.name);
   }
@@ -2660,9 +2694,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.key === 'd' || e.key === 'D') {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
       showDevStats();
+    }
+    if (e.key === 'x' || e.key === 'X') {
+      devMode = !devMode;
+      render();
     }
   });
 
