@@ -2074,7 +2074,7 @@ async function aiPerformMatch(pIdx, drawnCard, targets) {
         // Give worst card from own hand (never give a known Joker or Red King)
         const ownCards = nonNullCardIndices(pIdx);
         if (ownCards.length > 0) {
-          let worstIdx = ownCards[0];
+          let worstIdx = -1;
           let worstVal = -Infinity;
           for (const ci of ownCards) {
             const key = pIdx + '-' + ci;
@@ -2085,6 +2085,20 @@ async function aiPerformMatch(pIdx, drawnCard, targets) {
             if (val > worstVal) {
               worstVal = val;
               worstIdx = ci;
+            }
+          }
+          // If all cards are Jokers/Red Kings, give an unknown; last resort give any card
+          if (worstIdx < 0) {
+            const unknowns = ownCards.filter(ci => !state.aiMemory[pIdx].has(pIdx + '-' + ci));
+            if (unknowns.length > 0) {
+              worstIdx = unknowns[Math.floor(Math.random() * unknowns.length)];
+            } else {
+              // All cards are known Jokers/Red Kings — forced to give one (prefer Red King over Joker)
+              for (const ci of ownCards) {
+                const known = state.aiMemory[pIdx].get(pIdx + '-' + ci);
+                if (known && known.rank === 'K' && isRedSuit(known.suit)) { worstIdx = ci; break; }
+              }
+              if (worstIdx < 0) worstIdx = ownCards[0]; // absolute last resort
             }
           }
           const giveCard = state.players[pIdx].cards[worstIdx];
@@ -2139,13 +2153,17 @@ function decideAiAction(pIdx, drawnCard, fromDeck) {
     if (unknownIndices.length > 0) {
       return { type: 'swap', cardIdx: unknownIndices[Math.floor(Math.random() * unknownIndices.length)] };
     }
-    // All known cards are Jokers/Red Kings — swap with any non-null card
+    // All known cards are Jokers/Red Kings — swap a Red King (0 pts) for this Joker (-1 pts)
     for (let c = 0; c < cards.length; c++) {
-      if (cards[c]) return { type: 'swap', cardIdx: c };
+      if (!cards[c]) continue;
+      const k = mem.get(pIdx + '-' + c);
+      if (k && k.rank === 'K' && isRedSuit(k.suit)) return { type: 'swap', cardIdx: c };
     }
+    // All cards are Jokers already — no swap needed, discard the extra Joker
+    return { type: 'discard' };
   }
 
-  // One-eyed king: always swap with worst card
+  // Red King (0 pts): always swap with worst card (but never a Joker)
   if (isOneEyedKing(drawnCard)) {
     if (worstIdx >= 0 && worstVal > 0) {
       return { type: 'swap', cardIdx: worstIdx };
@@ -2153,6 +2171,8 @@ function decideAiAction(pIdx, drawnCard, fromDeck) {
     if (unknownIndices.length > 0) {
       return { type: 'swap', cardIdx: unknownIndices[Math.floor(Math.random() * unknownIndices.length)] };
     }
+    // All known cards are Jokers or Red Kings — no improvement possible
+    return { type: 'discard' };
   }
 
   // Low value cards (1-4): swap if we have worse
