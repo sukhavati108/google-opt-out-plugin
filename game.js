@@ -1475,14 +1475,22 @@ function onCardClick(pIdx, cIdx) {
 
 function performSwap(pIdx, cIdx) {
   const oldCard = state.players[pIdx].cards[cIdx];
-  state.players[pIdx].cards[cIdx] = state.drawnCard;
+  const swappedCard = state.drawnCard;
+  state.players[pIdx].cards[cIdx] = swappedCard;
 
   // Player knows what they put there
-  setMemory(0, pIdx, cIdx, state.drawnCard);
+  setMemory(0, pIdx, cIdx, swappedCard);
+
+  // If taken from discard pile, all AIs saw the card — they know what went where
+  if (state.drawnFrom === 'discard') {
+    for (let ai = 1; ai < state.numPlayers; ai++) {
+      state.aiMemory[ai].set(pIdx + '-' + cIdx, { rank: swappedCard.rank, suit: swappedCard.suit });
+    }
+  }
 
   // Discard the old card
   discardCard(oldCard);
-  addLog('You swapped ' + cardName(state.drawnCard) + ' into your hand, discarding ' + cardName(oldCard) + '.');
+  addLog('You swapped ' + cardName(swappedCard) + ' into your hand, discarding ' + cardName(oldCard) + '.');
 
   state.drawnCard = null;
   finishHumanAction('Swapped!');
@@ -1787,7 +1795,13 @@ async function runAiTurn(pIdx) {
       addDevLog(player.name + ' swapped ' + cardName(drawnCard) + ' (' + getCardValue(drawnCard) + ' pts) for ' + cardName(oldCard) + ' (' + getCardValue(oldCard) + ' pts) — saves ' + (getCardValue(oldCard) - getCardValue(drawnCard)) + ' pts.');
       player.cards[swapIdx] = drawnCard;
       setMemory(pIdx, pIdx, swapIdx, drawnCard);
-      state.humanMemory.delete(pIdx + '-' + swapIdx); // Human sees swap but doesn't know new card
+      // All other AIs saw this card taken from the discard pile — they know what went where
+      for (let ai = 1; ai < state.numPlayers; ai++) {
+        if (ai === pIdx) continue;
+        state.aiMemory[ai].set(pIdx + '-' + swapIdx, { rank: drawnCard.rank, suit: drawnCard.suit });
+      }
+      // Human also saw the discard card — they know what went where
+      state.humanMemory.set(pIdx + '-' + swapIdx, { rank: drawnCard.rank, suit: drawnCard.suit });
       discardCard(oldCard);
       addLog(player.name + ' placed ' + cardName(drawnCard) + ' into ' + ownPosDesc(pIdx, swapIdx) + ' slot. Discarded ' + cardName(oldCard) + '.');
       state.message = player.name + ' placed ' + cardName(drawnCard) + ' into their hand. Discarded ' + cardName(oldCard) + '.';
@@ -1877,7 +1891,13 @@ async function runAiTurn(pIdx) {
       const k = cabMem.get(pIdx + '-' + c);
       if (k) cabKnown += getCardValue(k); else cabUnk++;
     }
-    addDevLog(player.name + ' called Cabo — estimated hand: ' + (cabKnown + cabUnk * 6) + ' pts (known: ' + cabKnown + ', ' + cabUnk + ' unknown).');
+    const cabOppScores = [];
+    for (let op = 0; op < state.numPlayers; op++) {
+      if (op === pIdx) continue;
+      const opEst = estimateHandScore(op, state.aiMemory[pIdx]);
+      cabOppScores.push(state.players[op].name + '~' + opEst.total);
+    }
+    addDevLog(player.name + ' called Cabo — own est: ' + (cabKnown + cabUnk * 6) + ' pts (known: ' + cabKnown + ', ' + cabUnk + ' unknown). Opponents: ' + cabOppScores.join(', ') + '.');
     render();
     await showCaboOverlay(player.name);
   }
@@ -1886,27 +1906,53 @@ async function runAiTurn(pIdx) {
   nextTurn();
 }
 
-function shouldAiCallCabo(pIdx) {
-  const mem = state.aiMemory[pIdx];
+function estimateHandScore(pIdx, observerMem) {
   const cards = state.players[pIdx].cards;
   let knownTotal = 0;
   let unknownCount = 0;
-
   for (let c = 0; c < cards.length; c++) {
     if (!cards[c]) continue;
     const key = pIdx + '-' + c;
-    const known = mem.get(key);
+    const known = observerMem.get(key);
     if (known) {
       knownTotal += getCardValue(known);
     } else {
       unknownCount++;
     }
   }
+  // Estimate unknown cards at ~6 each (average deck value)
+  return { total: knownTotal + unknownCount * 6, knownTotal, unknownCount };
+}
 
-  // Estimate unknown cards at ~6 each
-  const estimated = knownTotal + unknownCount * 6;
-  const threshold = 4 + Math.random() * 6; // 4-10
-  return estimated <= threshold && unknownCount <= 1;
+function shouldAiCallCabo(pIdx) {
+  const mem = state.aiMemory[pIdx];
+  const myEst = estimateHandScore(pIdx, mem);
+
+  // Don't call Cabo with more than 1 unknown card — too risky
+  if (myEst.unknownCount > 1) return false;
+
+  // Estimate each opponent's score based on what this AI knows about them
+  let lowestOpponentEst = Infinity;
+  for (let p = 0; p < state.numPlayers; p++) {
+    if (p === pIdx) continue;
+    const oppEst = estimateHandScore(p, mem);
+    if (oppEst.total < lowestOpponentEst) {
+      lowestOpponentEst = oppEst.total;
+    }
+  }
+
+  // The AI believes it can win if its score is at or below the lowest opponent estimate.
+  // Add a small random margin (0-3) so it doesn't always require being strictly lowest —
+  // the opponent estimates are uncertain, so a small gamble is acceptable.
+  const margin = Math.random() * 3;
+  const believesLowest = myEst.total <= lowestOpponentEst + margin;
+
+  // Also require a reasonable absolute score — don't call with a terrible hand
+  // even if opponents seem worse (estimates could be wrong)
+  const absoluteMax = 10 + Math.random() * 4; // 10-14
+  const absolutelyOk = myEst.total <= absoluteMax;
+
+  return believesLowest && absolutelyOk;
 }
 
 function findAiDiscardSwapTarget(pIdx, card) {
@@ -1952,8 +1998,8 @@ function shouldAiTakeDiscard(pIdx, topDiscard) {
   // Always take a Joker — it's the best card
   if (isJoker(topDiscard)) return true;
 
-  // Take low-value cards or one-eyed king if we have a known high card
-  if (value > 4 && !isOneEyedKing(topDiscard)) return false;
+  // Take cards worth ≤6 or one-eyed king if we have a known worse card to swap with
+  if (value > 6 && !isOneEyedKing(topDiscard)) return false;
 
   // Find the worst known card to swap with
   let worstIdx = -1;
@@ -2230,7 +2276,7 @@ async function aiUsePower(pIdx, card) {
       }
     }
 
-    if (bestSwap && bestBenefit >= 4) {
+    if (bestSwap && bestBenefit >= 2) {
       // Perform the swap
       const card1 = state.players[bestSwap.p1].cards[bestSwap.c1];
       const card2 = state.players[bestSwap.p2].cards[bestSwap.c2];
