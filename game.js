@@ -2725,6 +2725,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Power Cards reference panel: collapsible on mobile
+  const powerRef = document.getElementById('power-ref');
+  const powerToggle = document.getElementById('power-ref-toggle');
+  if (window.innerWidth <= 600) powerRef.classList.add('collapsed');
+  powerToggle.addEventListener('click', () => {
+    powerRef.classList.toggle('collapsed');
+  });
+
   startBtn.addEventListener('click', () => {
     const numPlayers = parseInt(playerCount.value);
     showMemoryAids = memoryAid.checked;
